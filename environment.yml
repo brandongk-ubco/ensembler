@@ -1,0 +1,23 @@
+name: ensembler
+channels:
+  - pytorch
+  - conda-forge
+  - menpo
+dependencies:
+    - python=3.8
+    - pytorch
+    - torchvision
+    - torchaudio
+    - cudatoolkit=11.0
+    - pytest
+    - pytest-cov
+    - flake8
+    - yapf
+    - albumentations
+    - pip
+    - ffmpeg
+    - pip:
+      - segmentation_models_pytorch
+      - p_tqdm
+      - pytorch-lightning
+      - scikit-learn
