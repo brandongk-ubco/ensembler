@@ -1,8 +1,12 @@
-import os
 from .AugmentedDataset import AugmentedDataset
 import torch
 import numpy as np
 import torchvision
+
+image_height = 1024
+image_width = 2048
+num_classes = 20
+batch_size = 3
 
 mapping_20 = {
     0: 0,
@@ -42,37 +46,58 @@ mapping_20 = {
     -1: 0
 }
 
-cityscapes_folder = os.environ["CITYSCAPES_DATASET"]
-
-train_data = torchvision.datasets.Cityscapes(cityscapes_folder,
-                                             split='train',
-                                             mode='fine',
-                                             target_type='semantic')
-
-val_data = torchvision.datasets.Cityscapes(cityscapes_folder,
-                                           split='val',
-                                           mode='fine',
-                                           target_type='semantic')
+cityscapes_folder = "/mnt/d/work/datasets/cityscapes"
 
 
 class CityscapesAugmentedDataset(AugmentedDataset):
 
     classes = [
-        "background", "road", "sidewalk", "building", "wall", "fence",
+        "background", "road", "sidewalk", "building", "wall", "fence", "pole",
         "traffic light", "traffic sign", "vegetation", "terrain", "sky",
         "person", "rider", "car", "truck", "bus", "train", "motorcycle",
-        "bicycle", "license plate"
+        "bicycle"
     ]
 
     def __getitem__(self, idx):
         image, mask = self.dataset.__getitem__(idx)
 
-        label_mask = np.zeros((20, mask.shape[0], mask.shape[1]),
-                              dtype=image.dtype)
+        image = np.array(image)
+        mask = np.array(mask)
+
+        label_mask = np.zeros(
+            (len(self.classes), mask.shape[0], mask.shape[1]),
+            dtype=image.dtype)
 
         for k, v in mapping_20.items():
             label_mask[v, mask == k] = 1
 
+        image = image.astype("float32").swapaxes(0, 2).swapaxes(1, 2) / 255.
+
         label_mask = torch.Tensor(label_mask)
+        image = torch.Tensor(image)
 
         return image, label_mask
+
+
+def get_dataloaders(augmentations):
+    train_transform, val_transform, test_transform = augmentations
+    train_data = torchvision.datasets.Cityscapes(cityscapes_folder,
+                                                 split='train',
+                                                 mode='fine',
+                                                 target_type='semantic')
+
+    val_data = torchvision.datasets.Cityscapes(cityscapes_folder,
+                                               split='val',
+                                               mode='fine',
+                                               target_type='semantic')
+
+    test_data = torchvision.datasets.Cityscapes(cityscapes_folder,
+                                                split='test',
+                                                mode='fine',
+                                                target_type='semantic')
+
+    train_data = CityscapesAugmentedDataset(train_data, train_transform)
+    val_data = CityscapesAugmentedDataset(val_data, val_transform)
+    test_data = CityscapesAugmentedDataset(test_data, test_transform)
+
+    return train_data, val_data, test_data

@@ -4,20 +4,22 @@ channels:
   - conda-forge
   - menpo
 dependencies:
-    - python=3.8
-    - pytorch
-    - torchvision
-    - torchaudio
-    - cudatoolkit=11.0
-    - pytest
-    - pytest-cov
-    - flake8
-    - yapf
-    - albumentations
-    - pip
-    - ffmpeg
-    - pip:
-      - segmentation_models_pytorch
-      - p_tqdm
-      - pytorch-lightning
-      - scikit-learn
+  - python=3.8
+  - numpy=1.19.*
+  - matplotlib=3.3.*
+  - pandas=1.2.*
+  - pytorch
+  - torchvision
+  - torchaudio
+  - cudatoolkit=11.0
+  - pip
+  - pip:
+    - pytorch-lightning==1.1.4
+    - git+https://github.com/qubvel/segmentation_models.pytorch
+    - p_tqdm==1.3.3
+    - albumentations==0.5.2
+    - flake8==3.8.4
+    - yapf==0.30.0
+    - scikit_learn==0.24.1
+    - pytest==6.2.*
+    - pytest-cov==2.11.1

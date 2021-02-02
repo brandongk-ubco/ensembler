@@ -1,6 +1,7 @@
 from segmentation_models_pytorch.encoders._base import EncoderMixin
 from segmentation_models_pytorch.encoders import encoders
 import torch.nn as nn
+from Activations import Activations
 
 
 class UNetBlock(nn.Sequential):
@@ -32,7 +33,10 @@ class UNetEncoder(nn.Module, EncoderMixin):
 
         self.conv1 = nn.Conv2d(self._in_channels, self._width, 1).to("cuda")
 
-        self.blocks = [self.block(self._width, self.activation).to("cuda") for b in range(self._depth * 2)]
+        self.blocks = [
+            self.block(self._width, self.activation).to("cuda")
+            for b in range(self._depth * 2)
+        ]
 
     @property
     def out_channels(self):
@@ -44,8 +48,7 @@ class UNetEncoder(nn.Module, EncoderMixin):
 
         for i in range(0, self._depth * 2, 2):
             stages.append(
-                nn.Sequential(self.blocks[i],
-                              self.blocks[i+1],
+                nn.Sequential(self.blocks[i], self.blocks[i + 1],
                               nn.MaxPool2d(2)))
 
         return stages
@@ -62,10 +65,14 @@ class UNetEncoder(nn.Module, EncoderMixin):
         raise ValueError("Dilated mode not supported!")
 
 
-encoders.update({
-    "unet": {
-        "encoder": UNetEncoder,
-        "pretrained_settings": [],
-        'params': {}
-    }
-})
+for activation_name in Activations.choices():
+    activation = Activations.get(activation_name)
+    encoders.update({
+        "{}_unet".format(activation_name): {
+            "encoder": UNetEncoder,
+            "pretrained_settings": [],
+            'params': {
+                "activation": activation
+            }
+        }
+    })
