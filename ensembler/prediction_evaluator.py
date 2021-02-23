@@ -5,7 +5,7 @@ import numpy as np
 import os
 from p_tqdm import p_umap as mapper
 import pandas as pd
-from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score, jaccard_score
+from sklearn.metrics import precision_score, recall_score, f1_score, jaccard_score
 
 pl.seed_everything(42)
 matplotlib.use('Agg')

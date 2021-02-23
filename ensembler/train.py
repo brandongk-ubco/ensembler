@@ -1,14 +1,57 @@
 import pytorch_lightning as pl
 import matplotlib
 import sys
-from datasets import voc as dataset
+from datasets import severstal as dataset
 from Model import Segmenter as model
 import albumentations as A
+import UNetEncoder
+import os
+import json
+from torchinfo import summary
 
 pl.seed_everything(42)
 matplotlib.use('Agg')
 
 patience = 10
+
+
+class RecordTrainStatus(pl.callbacks.Callback):
+    def on_validation_epoch_end(self, trainer, pl_module):
+        state = {
+            "Trainer": {
+                "state": trainer.state.value,
+                "current_epoch": trainer.current_epoch,
+                "num_gpus": trainer.num_gpus,
+                "max_epochs": trainer.max_epochs,
+                "max_steps": trainer.max_steps,
+                "min_epochs": trainer.min_epochs,
+                "min_steps": trainer.min_steps,
+            },
+            "EarlyStopping": {
+                "best_score": float(trainer.callbacks[0].best_score),
+                "patience": float(trainer.callbacks[0].patience),
+                "wait_count": float(trainer.callbacks[0].wait_count),
+                "stopped_epoch": float(trainer.callbacks[0].stopped_epoch),
+                "min_delta": float(trainer.callbacks[0].min_delta),
+            },
+            "Scheduler": trainer.lr_schedulers[0]["scheduler"].state_dict()
+        }
+        with open(os.path.join(trainer.logger.log_dir, "trainer.json"),
+                  "w") as statefile:
+            json.dump(state, statefile, indent=4)
+
+
+class ModelSummary(pl.callbacks.Callback):
+    def on_sanity_check_end(self, trainer, pl_module):
+        dataloader = trainer.val_dataloaders[0]
+        batch = next(iter(dataloader))
+        model_summary = summary(trainer.model,
+                                input_size=tuple(batch[0].shape),
+                                verbose=0)
+        print(model_summary)
+        with open(os.path.join(trainer.logger.log_dir, "model.txt"),
+                  "w") as modelfile:
+            modelfile.write(str(model_summary))
 
 
 def get_augments(image_height, image_width):
@@ -45,7 +88,8 @@ if __name__ == '__main__':
 
     callbacks = [
         pl.callbacks.EarlyStopping('val_loss', patience=2 * patience),
-        pl.callbacks.LearningRateMonitor(logging_interval='epoch')
+        pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
+        RecordTrainStatus()
     ]
 
     try:
@@ -57,7 +101,6 @@ if __name__ == '__main__':
                          callbacks=callbacks,
                          min_epochs=patience,
                          deterministic=True,
-                         max_epochs=sys.maxsize,
-                         auto_scale_batch_size='binsearch')
+                         max_epochs=sys.maxsize)
 
     trainer.fit(model(dataset, get_augments, patience=10))

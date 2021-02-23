@@ -20,7 +20,7 @@ if __name__ == '__main__':
 
             fig, (ax1, ax2) = plt.subplots(2, 1)
 
-            ax1.imshow(img.swapaxes(0, 2).swapaxes(0, 1), vmin=0, vmax=1)
+            ax1.imshow(img.swapaxes(0, 2).swapaxes(0, 1))
             ax2.imshow(mask_img, cmap="gray", vmin=0, vmax=255)
 
             ax1.axis('off')

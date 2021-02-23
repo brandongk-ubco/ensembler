@@ -5,6 +5,14 @@ import numpy as np
 import os
 from matplotlib import pyplot as plt
 
+num_workers = 8
+
+
+def combined_loss(y_hat, y):
+    fl = smp.losses.FocalLoss("multilabel")(y_hat, y)
+    dl = smp.losses.DiceLoss("multilabel")(y_hat, y)
+    return dl + fl
+
 
 class Segmenter(pl.LightningModule):
     def __init__(self, dataset, get_augments, patience=10):
@@ -22,15 +30,18 @@ class Segmenter(pl.LightningModule):
         self.intensity = 255 // self.num_classes
 
     def get_model(self):
-        return smp.Unet(encoder_name="efficientnet-b0",
-                        encoder_weights="imagenet",
-                        in_channels=3,
+        depth = 6
+        width = 60
+        return smp.Unet(encoder_name="unet_leaky_relu_width{}".format(width),
+                        encoder_weights=None,
+                        encoder_depth=depth,
+                        decoder_channels=[width] * depth,
+                        in_channels=1,
                         classes=self.num_classes,
                         activation='softmax2d')
 
     def get_loss(self):
-        return lambda y_hat, y: smp.losses.DiceLoss("multilabel")(
-            y_hat, y) + smp.losses.FocalLoss("multilabel")(y_hat, y)
+        return combined_loss
 
     def get_optimizer(self):
         return torch.optim.Adam
@@ -38,13 +49,13 @@ class Segmenter(pl.LightningModule):
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_data,
                                            batch_size=self.batch_size,
-                                           num_workers=4,
+                                           num_workers=num_workers,
                                            shuffle=True)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_data,
                                            batch_size=self.batch_size,
-                                           num_workers=4,
+                                           num_workers=num_workers,
                                            shuffle=False)
 
     def training_step(self, batch, batch_idx):
@@ -61,7 +72,9 @@ class Segmenter(pl.LightningModule):
         y_hat = self.model(x)
         loss = self.loss(y_hat, y)
         self.log("val_loss", loss, prog_bar=True)
-        self.write_predictions(x, y, y_hat, batch_idx)
+        self.write_predictions(x.clone().detach().cpu().numpy(),
+                               y.clone().detach().cpu().numpy(),
+                               y_hat.clone().detach().cpu().numpy(), batch_idx)
         return {"val_loss", loss}
 
     def configure_optimizers(self):
@@ -84,13 +97,12 @@ class Segmenter(pl.LightningModule):
         except AttributeError:
             return
 
-        imgs = x.clone().detach().cpu()
-        predicted_masks = y_hat.clone().detach().cpu()
-        masks = y.clone().detach().cpu()
-        for i in range(imgs.shape[0]):
-            img = imgs[i, :, :, :].numpy()
-            mask = masks[i, :, :, :].numpy()
-            predicted_mask = predicted_masks[i, :, :, :].numpy()
+        # y_hat = np.round(y_hat, 0)
+
+        for i in range(x.shape[0]):
+            img = x[i, :, :, :]
+            mask = y[i, :, :, :]
+            predicted_mask = y_hat[i, :, :, :]
 
             mask_img = np.argmax(mask, axis=0) * self.intensity
             predicted_mask_img = np.argmax(predicted_mask,
@@ -98,7 +110,7 @@ class Segmenter(pl.LightningModule):
 
             fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
 
-            ax1.imshow(img.swapaxes(0, 2).swapaxes(0, 1), vmin=0, vmax=1)
+            ax1.imshow(img.swapaxes(0, 2).swapaxes(0, 1), cmap="gray")
             ax2.imshow(mask_img, cmap="gray", vmin=0, vmax=255)
             ax3.imshow(predicted_mask_img, cmap="gray", vmin=0, vmax=255)
             ax1.axis('off')

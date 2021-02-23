@@ -3,18 +3,20 @@ import numpy as np
 import torch
 from datasets.AugmentedDataset import DatasetAugmenter
 from torch.utils.data import Dataset
+from PIL import Image
+from p_tqdm import p_umap
 
 image_height = 512
 image_width = 512
 num_classes = 21
-batch_size = 20
+batch_size = 6
 
 voc_folder = "/mnt/d/work/datasets/voc"
 
 
 class VOCDataset(Dataset):
 
-    cache = {}
+    cache = {"images": {}, "masks": {}}
 
     classes = [
         "background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus",
@@ -24,6 +26,11 @@ class VOCDataset(Dataset):
     ]
 
     def __init__(self, voc_folder, val_percent=5., split="train"):
+
+        self.split = split
+
+        # This takes lots of memory... too much for 32GB
+        self.use_cache = False
 
         if split == "train":
             self.data = torchvision.datasets.VOCSegmentation(voc_folder,
@@ -36,37 +43,58 @@ class VOCDataset(Dataset):
         else:
             raise ValueError("Incorrect split {}".format(split))
 
+        self.samples = [i for i in zip(self.data.images, self.data.masks)]
+
+        if self.use_cache:
+            self.populate_cache()
+
     def load_image(self, sample):
-        image, mask = sample
+        image_path, mask_path = sample
 
-        image = np.array(image)
-        mask = np.array(mask)
+        if self.use_cache and image_path in self.cache["images"]:
+            image = self.cache["images"][image_path]
+        else:
+            image = Image.open(image_path)
+            image = np.array(image)
+            image = image.astype("float32") / 255.
+            image = torch.Tensor(image)
+            if self.use_cache:
+                self.cache["images"][image_path] = image
 
-        mask[mask == 255] = 0
+        if self.use_cache and mask_path in self.cache["masks"]:
+            label_mask = self.cache["masks"][mask_path]
+        else:
+            mask = Image.open(mask_path)
+            mask = np.array(mask)
+            mask[mask == 255] = 0
+            label_mask = np.zeros(
+                (len(self.classes), mask.shape[0], mask.shape[1]),
+                dtype=np.float32)
 
-        label_mask = np.zeros(
-            (len(self.classes), mask.shape[0], mask.shape[1]),
-            dtype=image.dtype)
+            for k, v in enumerate(self.classes):
+                label_mask[k, mask == k] = 1
 
-        for k, v in enumerate(self.classes):
-            label_mask[k, mask == k] = 1
+            label_mask = np.round(label_mask, 0)
+            label_mask = label_mask.transpose(1, 2, 0)
+            label_mask = torch.Tensor(label_mask)
 
-        image = image.astype("float32") / 255.
-        label_mask = label_mask.transpose(1, 2, 0)
-
-        label_mask = torch.Tensor(label_mask)
-        image = torch.Tensor(image)
+            if self.use_cache:
+                self.cache["masks"][mask_path] = label_mask
 
         return image, label_mask
 
+    def populate_cache(self):
+        print("Populating image cache for {}.".format(self.split))
+        p_umap(self.load_image, self.samples)
+
     def __len__(self):
-        return len(self.data)
+        return len(self.samples)
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        return self.load_image(self.data[idx])
+        return self.load_image(self.samples[idx])
 
 
 def get_dataloaders(augmentations):
