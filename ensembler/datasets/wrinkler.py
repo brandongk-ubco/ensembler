@@ -12,6 +12,7 @@ image_height = 1792
 image_width = 2048
 batch_size = 2
 num_classes = 4
+loss_weights = [0.5, 1, 10, 1]
 
 
 class WrinklerDataset(Dataset):

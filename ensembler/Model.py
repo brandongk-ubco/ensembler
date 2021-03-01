@@ -6,14 +6,21 @@ import os
 from matplotlib import pyplot as plt
 from argparse import ArgumentParser
 from datasets import Datasets
+from functools import partial
+
+
+def weighted_loss(y_hat, y, weights, loss_function):
+    loss = loss_function(y_hat, y).reshape(y.shape)
+    for i, w in enumerate(weights):
+        loss[:, i, :, :] = loss[:, i, :, :] * w
+    loss = loss.mean()
+    return loss
 
 
 class Segmenter(pl.LightningModule):
     def __init__(self, get_augments, **kwargs):
         super().__init__()
         self.hparams = kwargs
-        self.loss = self.get_loss()
-        self.optimizer = self.get_optimizer()
         self.patience = self.hparams["patience"]
         self.dataset = Datasets.get(self.hparams["dataset"])
         self.train_data, self.val_data, self.test_data = self.dataset.get_dataloaders(
@@ -22,6 +29,8 @@ class Segmenter(pl.LightningModule):
         self.encoder_name = self.hparams["encoder_name"]
         self.num_workers = self.hparams["num_workers"]
 
+        self.loss = self.get_loss()
+        self.optimizer = self.get_optimizer()
         self.batches_to_write = 2
         self.intensity = 255 // self.dataset.num_classes
 
@@ -32,7 +41,7 @@ class Segmenter(pl.LightningModule):
         parser = ArgumentParser(parents=[parent_parser], add_help=False)
         parser.add_argument('--encoder_name',
                             type=str,
-                            default="efficientnet-b3")
+                            default="efficientnet-b0")
         parser.add_argument('--num_workers',
                             type=int,
                             default=os.cpu_count() // 2)
@@ -54,8 +63,11 @@ class Segmenter(pl.LightningModule):
                         activation='softmax2d')
 
     def get_loss(self):
-        return lambda y_hat, y: smp.losses.FocalLoss("multilabel")(
-            y_hat, y) + smp.losses.DiceLoss("multilabel")(y_hat, y)
+        kwargs = {
+            "weights": self.dataset.loss_weights,
+            "loss_function": smp.losses.FocalLoss("multilabel", reduction=None)
+        }
+        return partial(weighted_loss, **kwargs)
 
     def get_optimizer(self):
         return torch.optim.Adam
@@ -148,7 +160,11 @@ class Segmenter(pl.LightningModule):
             ax2.axis('off')
             ax3.axis('off')
 
-            plt.savefig(
-                os.path.join(self.logger.log_dir,
-                             "{}_{}.png".format(batch_idx, i)))
+            outfile = os.path.join(self.logger.log_dir,
+                                   "{}_{}.png".format(batch_idx, i))
+
+            if os.path.exists(outfile):
+                os.remove(outfile)
+
+            plt.savefig(outfile)
             plt.close()
