@@ -1,13 +1,15 @@
 import pytorch_lightning as pl
 import matplotlib
 import sys
-from datasets import severstal as dataset
 from Model import Segmenter as model
 import albumentations as A
 import UNetEncoder
 import os
 import json
 from torchinfo import summary
+import cv2
+from parameters import args
+from datasets import Datasets
 
 pl.seed_everything(42)
 matplotlib.use('Agg')
@@ -58,13 +60,10 @@ def get_augments(image_height, image_width):
     train_transform = A.Compose([
         A.PadIfNeeded(min_height=image_height,
                       min_width=image_width,
-                      always_apply=True,
-                      border_mode=0),
-        A.CropNonEmptyMaskIfExists(
-            image_height,
-            image_width,
-            always_apply=True,
-        ),
+                      always_apply=True),
+        A.CropNonEmptyMaskIfExists(height=image_height,
+                                   width=image_width,
+                                   always_apply=True),
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5)
     ])
@@ -72,14 +71,14 @@ def get_augments(image_height, image_width):
     val_transform = A.Compose([
         A.PadIfNeeded(min_height=image_height,
                       min_width=image_width,
-                      always_apply=True,
-                      border_mode=0),
-        A.CropNonEmptyMaskIfExists(image_height,
-                                   image_width,
+                      always_apply=True),
+        A.CropNonEmptyMaskIfExists(height=image_height,
+                                   width=image_width,
                                    always_apply=True)
     ])
 
-    test_transform = A.Compose([])
+    test_transform = A.Compose(
+        [A.PadIfNeeded(min_height=512, min_width=512, always_apply=True)])
 
     return (train_transform, val_transform, test_transform)
 
@@ -97,10 +96,13 @@ if __name__ == '__main__':
     except pl.utilities.exceptions.MisconfigurationException:
         pass
 
-    trainer = pl.Trainer(gpus=1,
-                         callbacks=callbacks,
-                         min_epochs=patience,
-                         deterministic=True,
-                         max_epochs=sys.maxsize)
+    trainer = pl.Trainer.from_argparse_args(args,
+                                            gpus=1,
+                                            callbacks=callbacks,
+                                            min_epochs=patience,
+                                            deterministic=True,
+                                            max_epochs=sys.maxsize)
 
-    trainer.fit(model(dataset, get_augments, patience=10))
+    dict_args = vars(args)
+
+    trainer.fit(model(get_augments, **dict_args))

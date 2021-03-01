@@ -10,7 +10,7 @@ from datasets.AugmentedDataset import DatasetAugmenter
 image_height = 256
 image_width = 1600
 batch_size = 4
-num_classes = 5
+num_classes = 4
 
 
 class SeverstalDataset(Dataset):
@@ -57,18 +57,15 @@ class SeverstalDataset(Dataset):
         if self.use_cache:
             self.populate_cache()
 
+    def get_image_names(self):
+        return self.images
+
     def load_image(self, image_name):
         image_file = os.path.join(self.severstal_folder, image_name)
         image_np = np.load(image_file)
 
         image = image_np["image"]
         mask = image_np["mask"]
-
-        background = np.expand_dims((np.sum(mask,
-                                            axis=2) == 0).astype(mask.dtype),
-                                    axis=2)
-
-        mask = np.concatenate([background, mask], axis=2)
 
         image = np.expand_dims(image, axis=2)
 
@@ -94,7 +91,6 @@ class SeverstalDataset(Dataset):
 
 
 def get_dataloaders(augmentations, use_cache=False):
-    train_transform, val_transform, test_transform = augmentations
 
     train_data = SeverstalDataset("/mnt/d/work/datasets/severstal/",
                                   split="train",
@@ -106,6 +102,7 @@ def get_dataloaders(augmentations, use_cache=False):
                                  split="test",
                                  use_cache=use_cache)
 
+    train_transform, val_transform, test_transform = augmentations
     train_data = DatasetAugmenter(train_data, train_transform)
     val_data = DatasetAugmenter(val_data, val_transform)
     test_data = DatasetAugmenter(test_data, test_transform)

@@ -5,11 +5,12 @@ from datasets.AugmentedDataset import DatasetAugmenter
 from torch.utils.data import Dataset
 from PIL import Image
 from p_tqdm import p_umap
+import os
 
 image_height = 512
 image_width = 512
 num_classes = 21
-batch_size = 6
+batch_size = 8
 
 voc_folder = "/mnt/d/work/datasets/voc"
 
@@ -47,6 +48,11 @@ class VOCDataset(Dataset):
 
         if self.use_cache:
             self.populate_cache()
+
+    def get_image_names(self):
+        return [
+            os.path.splitext(os.path.basename(i))[0] for i in self.data.images
+        ]
 
     def load_image(self, sample):
         image_path, mask_path = sample

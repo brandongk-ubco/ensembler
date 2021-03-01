@@ -5,12 +5,13 @@ import os
 import random
 from PIL import Image
 import numpy as np
-from p_tqdm import p_uimap
+from p_tqdm import p_uimap as mapper
 from datasets.AugmentedDataset import DatasetAugmenter
 
 image_height = 1792
 image_width = 2048
 batch_size = 2
+num_classes = 4
 
 
 class WrinklerDataset(Dataset):
@@ -24,10 +25,8 @@ class WrinklerDataset(Dataset):
                  wrinkler_folder,
                  test_percent=15.,
                  val_percent=5.,
-                 split="train",
-                 use_cache=True):
+                 split="train"):
         self.split = split
-        self.use_cache = use_cache
         self.wrinkler_folder = wrinkler_folder
 
         images = [
@@ -54,9 +53,6 @@ class WrinklerDataset(Dataset):
         elif split == "test":
             self.images = test_images
 
-        if self.use_cache:
-            self.populate_cache()
-
     def load_image(self, image_name):
         image_path = os.path.join(self.wrinkler_folder, "Images", image_name)
         mask_path = os.path.join(self.wrinkler_folder, "Masks1", image_name)
@@ -73,12 +69,10 @@ class WrinklerDataset(Dataset):
         for i, (clazz, value) in enumerate(self.classes.items()):
             one_hot_mask[:, :, i][mask == value] = 1
 
-        return image_name, image, one_hot_mask
+        image = image.astype("float32") / 255
+        one_hot_mask = one_hot_mask.astype(image.dtype)
 
-    def populate_cache(self):
-        print("Populating image cache for {}.".format(self.split))
-        for image_name, image, mask in p_uimap(self.load_image, self.images):
-            self.cache[image_name] = (image, mask)
+        return image_name, image, one_hot_mask
 
     def __len__(self):
         return len(self.images)
@@ -87,19 +81,16 @@ class WrinklerDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        if self.use_cache:
-            return self.cache[self.images[idx]]
-        else:
-            image_name, image, mask = self.load_image(self.images[idx])
-            return (image, mask)
+        image_name, image, mask = self.load_image(self.images[idx])
+        return (image, mask)
 
 
-def get_dataloaders(augmentations, use_cache=True):
+def get_dataloaders(directory, augmentations):
     train_transform, val_transform, test_transform = augmentations
 
-    train_data = WrinklerDataset(split="train", use_cache=use_cache)
-    val_data = WrinklerDataset(split="val", use_cache=use_cache)
-    test_data = WrinklerDataset(split="test", use_cache=use_cache)
+    train_data = WrinklerDataset(directory, split="train")
+    val_data = WrinklerDataset(directory, split="val")
+    test_data = WrinklerDataset(directory, split="test")
 
     train_data = DatasetAugmenter(train_data, train_transform)
     val_data = DatasetAugmenter(val_data, val_transform)

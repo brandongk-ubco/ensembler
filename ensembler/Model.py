@@ -4,63 +4,87 @@ import torch
 import numpy as np
 import os
 from matplotlib import pyplot as plt
-
-num_workers = 8
-
-
-def combined_loss(y_hat, y):
-    fl = smp.losses.FocalLoss("multilabel")(y_hat, y)
-    dl = smp.losses.DiceLoss("multilabel")(y_hat, y)
-    return dl + fl
+from argparse import ArgumentParser
+from datasets import Datasets
 
 
 class Segmenter(pl.LightningModule):
-    def __init__(self, dataset, get_augments, patience=10):
+    def __init__(self, get_augments, **kwargs):
         super().__init__()
+        self.hparams = kwargs
         self.loss = self.get_loss()
         self.optimizer = self.get_optimizer()
-        self.patience = 10
+        self.patience = self.hparams["patience"]
+        self.dataset = Datasets.get(self.hparams["dataset"])
+        self.train_data, self.val_data, self.test_data = self.dataset.get_dataloaders(
+            os.path.join(self.hparams["data_dir"], self.hparams["dataset"]),
+            get_augments(self.dataset.image_height, self.dataset.image_width))
+        self.encoder_name = self.hparams["encoder_name"]
+        self.num_workers = self.hparams["num_workers"]
+
         self.batches_to_write = 2
-        self.num_classes = dataset.num_classes
-        self.train_data, self.val_data, self.test_data = dataset.get_dataloaders(
-            get_augments(dataset.image_height, dataset.image_width))
-        self.batch_size = dataset.batch_size
+        self.intensity = 255 // self.dataset.num_classes
 
         self.model = self.get_model()
-        self.intensity = 255 // self.num_classes
+
+    @staticmethod
+    def add_model_specific_args(parent_parser):
+        parser = ArgumentParser(parents=[parent_parser], add_help=False)
+        parser.add_argument('--encoder_name',
+                            type=str,
+                            default="efficientnet-b3")
+        parser.add_argument('--num_workers',
+                            type=int,
+                            default=os.cpu_count() // 2)
+        parser.add_argument('--patience', type=int, default=10)
+        parser.add_argument('--data_dir',
+                            type=str,
+                            nargs='?',
+                            const=os.environ.get("DATA_DIR", None),
+                            default=os.environ.get("DATA_DIR", None))
+        return parser
 
     def get_model(self):
-        depth = 6
-        width = 60
-        return smp.Unet(encoder_name="unet_leaky_relu_width{}".format(width),
+        depth = 5
+        return smp.Unet(encoder_name=self.encoder_name,
                         encoder_weights=None,
                         encoder_depth=depth,
-                        decoder_channels=[width] * depth,
-                        in_channels=1,
-                        classes=self.num_classes,
+                        in_channels=3,
+                        classes=self.dataset.num_classes,
                         activation='softmax2d')
 
     def get_loss(self):
-        return combined_loss
+        return lambda y_hat, y: smp.losses.FocalLoss("multilabel")(
+            y_hat, y) + smp.losses.DiceLoss("multilabel")(y_hat, y)
 
     def get_optimizer(self):
         return torch.optim.Adam
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_data,
-                                           batch_size=self.batch_size,
-                                           num_workers=num_workers,
+                                           batch_size=self.dataset.batch_size,
+                                           num_workers=self.num_workers,
                                            shuffle=True)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_data,
-                                           batch_size=self.batch_size,
-                                           num_workers=num_workers,
+                                           batch_size=self.dataset.batch_size,
+                                           num_workers=self.num_workers,
+                                           shuffle=False)
+
+    def test_dataloader(self):
+        return torch.utils.data.DataLoader(self.test_data,
+                                           batch_size=self.dataset.batch_size,
+                                           num_workers=self.num_workers,
                                            shuffle=False)
 
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
+        assert y_hat.shape == y.shape
+        assert x.shape[0] == y.shape[0]
+        assert x.shape[2:] == y.shape[2:]
+
         loss = self.loss(y_hat, y)
         return loss
 
@@ -97,20 +121,27 @@ class Segmenter(pl.LightningModule):
         except AttributeError:
             return
 
-        # y_hat = np.round(y_hat, 0)
-
         for i in range(x.shape[0]):
             img = x[i, :, :, :]
             mask = y[i, :, :, :]
             predicted_mask = y_hat[i, :, :, :]
 
-            mask_img = np.argmax(mask, axis=0) * self.intensity
+            img = img.transpose(1, 2, 0)
+            mask = mask.transpose(1, 2, 0)
+            predicted_mask = predicted_mask.transpose(1, 2, 0)
+
+            mask_img = np.argmax(mask, axis=2) * self.intensity
+
             predicted_mask_img = np.argmax(predicted_mask,
-                                           axis=0) * self.intensity
+                                           axis=2) * self.intensity
 
             fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
 
-            ax1.imshow(img.swapaxes(0, 2).swapaxes(0, 1), cmap="gray")
+            if img.shape[2] == 1:
+                ax1.imshow(img.squeeze(), cmap="gray")
+            else:
+                ax1.imshow(img, cmap="gray")
+
             ax2.imshow(mask_img, cmap="gray", vmin=0, vmax=255)
             ax3.imshow(predicted_mask_img, cmap="gray", vmin=0, vmax=255)
             ax1.axis('off')

@@ -1,59 +1,55 @@
 import pytorch_lightning as pl
 import matplotlib
-from data import get_dataloaders
 from Model import Segmenter
 import numpy as np
-import torch
 import os
-from p_tqdm import t_map as mapper
+from train import get_augments, dataset
+from tqdm import tqdm
 
-pl.seed_everything(42)
 matplotlib.use('Agg')
 
-datapath = "/mnt/d/work/datasets/wrinkler/"
-model = "/mnt/d/work/repos/wrinkler/lightning_logs/version_7/checkpoints/epoch=10-step=912.ckpt"
-outdir = "/mnt/d/work/repos/wrinkler/lightning_logs/version_7/predictions/"
+model = "/mnt/d/work/repos/ensembler/lightning_logs/version_1/checkpoints/epoch=79-step=19519.ckpt"
+outdir = "/mnt/d/work/repos/ensembler/lightning_logs/version_1/predictions/"
 
 os.makedirs(outdir, exist_ok=True)
 
 
-def getNextMultiple(x, multiple):
-    return ((x + multiple - 1) & (-multiple))
+def predict(i, x, y):
+    x = x.to("cuda")
+    y = y.to("cuda")
+    batch_size = x.shape[0]
+    y_hat = m(x)
+    x = x.cpu().numpy()
+    y = y.cpu().numpy()
+    y_hat = y_hat.cpu().numpy()
 
+    assert y_hat.shape == y.shape
 
-def padImageToMultiple(img, multiple=256):
-    img = img.numpy().squeeze(0)
-    ww = getNextMultiple(img.shape[2], multiple)
-    hh = getNextMultiple(img.shape[1], multiple)
-    xx = (ww - img.shape[2]) // 2
-    yy = (hh - img.shape[1]) // 2
+    for img_num in range(batch_size):
+        name = image_names[i * batch_size + img_num]
+        prediction = y_hat[img_num, :, :, :]
+        img = x[img_num, :, :, :]
+        mask = y[img_num, :, :, :]
 
-    img = np.pad(img, ((0, 0), (yy, yy), (xx, xx)), 'constant')
-    return torch.from_numpy(np.expand_dims(img, 0))
-
-
-def unpadImage(img, padded):
-    yy = (padded.shape[2] - img.shape[2]) // 2
-    xx = (padded.shape[3] - img.shape[3]) // 2
-    return padded[:, :, yy:padded.shape[2] - yy, xx:padded.shape[3] - xx]
-
-
-def predict(src):
-    i, x, y = src
-    name = os.path.splitext(
-        (os.path.basename(test_loader.dataset.dataset.images[i])))[0]
-    x_pad = padImageToMultiple(x)
-    y_hat = wrinkler(x_pad).numpy()
-    y_hat = unpadImage(y, y_hat)
-    assert y_hat.shape == y.numpy().shape
-    y_hat = y_hat.squeeze(0)
-    np.savez_compressed(os.path.join(outdir, name), prediction=y_hat)
+        np.savez_compressed(os.path.join(outdir, name),
+                            prediction=prediction,
+                            image=img,
+                            mask=mask)
 
 
 if __name__ == '__main__':
-    train_loader, val_loader, test_loader = get_dataloaders(datapath,
-                                                            use_cache=False)
 
-    wrinkler = Segmenter.load_from_checkpoint(model)
-    wrinkler.freeze()
-    mapper(predict, [(i, x, y) for i, (x, y) in enumerate(test_loader)])
+    m = Segmenter.load_from_checkpoint(model,
+                                       get_augments=get_augments,
+                                       dataset=dataset)
+
+    test_dataloader = m.test_dataloader()
+    image_names = test_dataloader.dataset.dataset.get_image_names()
+
+    m = m.to("cuda")
+
+    m.eval()
+    m.freeze()
+    for i, (x, y) in tqdm(enumerate(test_dataloader),
+                          total=len(test_dataloader)):
+        predict(i, x, y)
