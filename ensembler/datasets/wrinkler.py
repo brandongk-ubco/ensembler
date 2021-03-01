@@ -5,7 +5,6 @@ import os
 import random
 from PIL import Image
 import numpy as np
-from p_tqdm import p_uimap as mapper
 from datasets.AugmentedDataset import DatasetAugmenter
 
 image_height = 1792

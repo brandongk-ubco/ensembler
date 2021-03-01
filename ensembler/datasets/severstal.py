@@ -4,13 +4,13 @@ from torch.utils.data import Dataset
 import os
 import random
 import numpy as np
-from p_tqdm import t_map as mapper
 from datasets.AugmentedDataset import DatasetAugmenter
 
 image_height = 256
 image_width = 1600
 batch_size = 4
-num_classes = 4
+num_classes = 5
+loss_weights = [0.5, 1, 2, 0.5, 1]
 
 
 class SeverstalDataset(Dataset):
@@ -24,10 +24,8 @@ class SeverstalDataset(Dataset):
                  severstal_folder,
                  test_percent=15.,
                  val_percent=5.,
-                 split="train",
-                 use_cache=True):
+                 split="train"):
         self.split = split
-        self.use_cache = use_cache
         self.severstal_folder = severstal_folder
 
         images = [
@@ -54,9 +52,6 @@ class SeverstalDataset(Dataset):
         elif split == "test":
             self.images = test_images
 
-        if self.use_cache:
-            self.populate_cache()
-
     def get_image_names(self):
         return self.images
 
@@ -67,14 +62,15 @@ class SeverstalDataset(Dataset):
         image = image_np["image"]
         mask = image_np["mask"]
 
+        background = np.expand_dims((np.sum(mask,
+                                            axis=2) == 0).astype(mask.dtype),
+                                    axis=2)
+
+        mask = np.concatenate([background, mask], axis=2)
+
         image = np.expand_dims(image, axis=2)
 
         return image_name, image, mask
-
-    def populate_cache(self):
-        print("Populating image cache for {}.".format(self.split))
-        for image_name, image, mask in mapper(self.load_image, self.images):
-            self.cache[image_name] = (image, mask)
 
     def __len__(self):
         return len(self.images)
@@ -83,24 +79,15 @@ class SeverstalDataset(Dataset):
         if torch.is_tensor(idx):
             idx = idx.tolist()
 
-        if self.use_cache:
-            return self.cache[self.images[idx]]
-        else:
-            image_name, image, mask = self.load_image(self.images[idx])
-            return (image, mask)
+        image_name, image, mask = self.load_image(self.images[idx])
+        return (image, mask)
 
 
-def get_dataloaders(augmentations, use_cache=False):
+def get_dataloaders(directory, augmentations):
 
-    train_data = SeverstalDataset("/mnt/d/work/datasets/severstal/",
-                                  split="train",
-                                  use_cache=use_cache)
-    val_data = SeverstalDataset("/mnt/d/work/datasets/severstal/",
-                                split="val",
-                                use_cache=use_cache)
-    test_data = SeverstalDataset("/mnt/d/work/datasets/severstal/",
-                                 split="test",
-                                 use_cache=use_cache)
+    train_data = SeverstalDataset(directory, split="train")
+    val_data = SeverstalDataset(directory, split="val")
+    test_data = SeverstalDataset(directory, split="test")
 
     train_transform, val_transform, test_transform = augmentations
     train_data = DatasetAugmenter(train_data, train_transform)

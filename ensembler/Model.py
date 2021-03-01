@@ -58,7 +58,7 @@ class Segmenter(pl.LightningModule):
         return smp.Unet(encoder_name=self.encoder_name,
                         encoder_weights=None,
                         encoder_depth=depth,
-                        in_channels=3,
+                        in_channels=1,
                         classes=self.dataset.num_classes,
                         activation='softmax2d')
 
