@@ -3,13 +3,15 @@ import matplotlib
 from Model import Segmenter
 import numpy as np
 import os
-from train import get_augments, dataset
+from train import get_augments
 from tqdm import tqdm
+from datasets import Datasets
+from parameters import args
 
 matplotlib.use('Agg')
 
-model = "/mnt/d/work/repos/ensembler/lightning_logs/version_1/checkpoints/epoch=79-step=19519.ckpt"
-outdir = "/mnt/d/work/repos/ensembler/lightning_logs/version_1/predictions/"
+model = "/mnt/d/work/repos/ensembler/lightning_logs/version_2/checkpoints/epoch=55-step=37687.ckpt"
+outdir = "/mnt/d/work/repos/ensembler/lightning_logs/version_2/predictions/"
 
 os.makedirs(outdir, exist_ok=True)
 
@@ -39,9 +41,13 @@ def predict(i, x, y):
 
 if __name__ == '__main__':
 
+    dict_args = vars(args)
+
+    dataset = Datasets.get(dict_args["dataset"])
+
     m = Segmenter.load_from_checkpoint(model,
                                        get_augments=get_augments,
-                                       dataset=dataset)
+                                       **dict_args)
 
     test_dataloader = m.test_dataloader()
     image_names = test_dataloader.dataset.dataset.get_image_names()

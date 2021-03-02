@@ -8,17 +8,16 @@ from datasets.AugmentedDataset import DatasetAugmenter
 
 image_height = 256
 image_width = 1600
-batch_size = 4
+batch_size = 8
 num_classes = 5
-loss_weights = [0.5, 1, 2, 0.5, 1]
+loss_weights = [1, 7.9, 28.7, 1.4, 8.9]
+classes = {"background": 0, "1": 50, "2": 100, "3": 200, "4": 250}
 
 
 class SeverstalDataset(Dataset):
     """Severstal dataset."""
 
     cache = {}
-
-    classes = {"background": 0, "1": 50, "2": 100, "3": 200, "4": 250}
 
     def __init__(self,
                  severstal_folder,

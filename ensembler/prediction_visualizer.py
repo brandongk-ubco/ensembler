@@ -2,12 +2,12 @@ import matplotlib
 import numpy as np
 import os
 from matplotlib import pyplot as plt
-from p_tqdm import t_map as mapper
+from p_tqdm import p_umap as mapper
 import glob
 
 matplotlib.use('Agg')
 
-outdir = "/mnt/d/work/repos/ensembler/lightning_logs/version_1/predictions/"
+outdir = "/mnt/d/work/repos/ensembler/lightning_logs/version_2/predictions/"
 
 
 def visualize_prediction(src):
@@ -16,27 +16,11 @@ def visualize_prediction(src):
     image = prediction["image"].transpose(1, 2, 0)
     mask = prediction["mask"].transpose(1, 2, 0)
 
-    import pdb
-    pdb.set_trace()
-
     filename = os.path.basename(src)
     name, ext = os.path.splitext(filename)
 
     intensity = 255 // mask.shape[2]
-
-    mask_background = np.expand_dims((np.sum(mask,
-                                             axis=2) == 0).astype(mask.dtype),
-                                     axis=2)
-
-    mask = np.concatenate([mask_background, mask], axis=2)
     mask_img = np.argmax(mask, axis=2) * intensity
-
-    predicted_mask_background = np.expand_dims(
-        (np.max(predicted_mask, axis=2) < 0.5).astype(predicted_mask.dtype),
-        axis=2)
-
-    predicted_mask = np.concatenate(
-        [predicted_mask_background, predicted_mask], axis=2)
 
     predicted_mask_img = np.argmax(predicted_mask, axis=2) * intensity
 
