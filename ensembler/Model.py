@@ -23,7 +23,7 @@ class Segmenter(pl.LightningModule):
         self.hparams = kwargs
         self.patience = self.hparams["patience"]
         self.dataset = Datasets.get(self.hparams["dataset"])
-        self.train_data, self.val_data, self.test_data = self.dataset.get_dataloaders(
+        self.train_data, self.val_data, self.test_data, self.all_data = self.dataset.get_dataloaders(
             os.path.join(self.hparams["data_dir"], self.hparams["dataset"]),
             get_augments(self.dataset.image_height, self.dataset.image_width))
         self.encoder_name = self.hparams["encoder_name"]
@@ -72,11 +72,18 @@ class Segmenter(pl.LightningModule):
     def get_optimizer(self):
         return torch.optim.Adam
 
+    def all_dataloader(self):
+        return torch.utils.data.DataLoader(self.all_data,
+                                           batch_size=self.dataset.batch_size,
+                                           num_workers=self.num_workers,
+                                           shuffle=False)
+
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_data,
                                            batch_size=self.dataset.batch_size,
                                            num_workers=self.num_workers,
-                                           shuffle=True)
+                                           shuffle=True,
+                                           drop_last=True)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_data,
