@@ -6,14 +6,14 @@ import json
 import numpy as np
 from datasets.AugmentedDataset import DatasetAugmenter
 import pandas as pd
-from utils import split_dataframe
+from utils import split_dataframe, sample_dataframe
 
 image_height = 256
 image_width = 1600
-batch_size = 8
 num_classes = 5
 loss_weights = [1.063732, 697.93036, 3272.005379, 20.793984, 99.165978]
 classes = {"background": 0, "1": 50, "2": 100, "3": 200, "4": 250}
+num_channels = 1
 
 
 class SeverstalDataset(Dataset):
@@ -24,11 +24,6 @@ class SeverstalDataset(Dataset):
     def __init__(self, severstal_folder, val_percent=1., split="train"):
         self.split = split
         self.severstal_folder = severstal_folder
-
-        images = [
-            os.path.basename(i)
-            for i in glob.glob(os.path.join(self.severstal_folder, "*.npz"))
-        ]
 
         with open(os.path.join(self.severstal_folder, "split.json"),
                   "r") as splitjson:
@@ -42,13 +37,12 @@ class SeverstalDataset(Dataset):
         dataset_df = pd.read_csv(statistics_file)
         trainval_df = dataset_df[dataset_df["sample"].isin(trainval_images)]
 
+        trainval_df = sample_dataframe(trainval_df)
         val_df, train_df = split_dataframe(trainval_df, 10.)
 
         val_images = val_df["sample"].tolist()
         train_images = train_df["sample"].tolist()
 
-        assert len(test_images) + len(val_images) + len(train_images) == len(
-            images)
         if self.split == "train":
             self.images = train_images
         elif self.split == "val":
@@ -98,18 +92,6 @@ def get_dataloaders(directory, augmentations):
     val_data = SeverstalDataset(directory, split="val")
     test_data = SeverstalDataset(directory, split="test")
     all_data = SeverstalDataset(directory, split="all")
-
-    assert len(
-        set(train_data.images + val_data.images +
-            test_data.images)) == len(train_data.images + val_data.images +
-                                      test_data.images)
-
-    assert len(train_data.images + val_data.images + test_data.images) == len(
-        all_data.images)
-
-    assert len(
-        set(train_data.images + val_data.images + test_data.images +
-            all_data.images)) == len(all_data.images)
 
     train_transform, val_transform, test_transform = augmentations
     train_data = DatasetAugmenter(train_data, train_transform)

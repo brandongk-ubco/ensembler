@@ -6,15 +6,8 @@ import os
 from matplotlib import pyplot as plt
 from argparse import ArgumentParser
 from datasets import Datasets
+from utils import weighted_loss
 from functools import partial
-
-
-def weighted_loss(y_hat, y, weights, loss_function):
-    loss = loss_function(y_hat, y).reshape(y.shape)
-    for i, w in enumerate(weights):
-        loss[:, i, :, :] = loss[:, i, :, :] * w
-    loss = loss.mean()
-    return loss
 
 
 class Segmenter(pl.LightningModule):
@@ -28,6 +21,8 @@ class Segmenter(pl.LightningModule):
             get_augments(self.dataset.image_height, self.dataset.image_width))
         self.encoder_name = self.hparams["encoder_name"]
         self.num_workers = self.hparams["num_workers"]
+        self.depth = self.hparams["depth"]
+        self.batch_size = self.hparams["batch_size"]
 
         self.loss = self.get_loss()
         self.optimizer = self.get_optimizer()
@@ -42,10 +37,12 @@ class Segmenter(pl.LightningModule):
         parser.add_argument('--encoder_name',
                             type=str,
                             default="efficientnet-b0")
+        parser.add_argument('--batch_size', type=int, default=4)
         parser.add_argument('--num_workers',
                             type=int,
                             default=os.cpu_count() // 2)
         parser.add_argument('--patience', type=int, default=10)
+        parser.add_argument('--depth', type=int, default=5)
         parser.add_argument('--data_dir',
                             type=str,
                             nargs='?',
@@ -54,11 +51,10 @@ class Segmenter(pl.LightningModule):
         return parser
 
     def get_model(self):
-        depth = 5
         return smp.Unet(encoder_name=self.encoder_name,
                         encoder_weights=None,
-                        encoder_depth=depth,
-                        in_channels=1,
+                        encoder_depth=self.depth,
+                        in_channels=self.dataset.num_channels,
                         classes=self.dataset.num_classes,
                         activation='softmax2d')
 
@@ -67,33 +63,36 @@ class Segmenter(pl.LightningModule):
             "weights": self.dataset.loss_weights,
             "loss_function": smp.losses.FocalLoss("multilabel", reduction=None)
         }
-        return partial(weighted_loss, **kwargs)
+        focal_loss = partial(weighted_loss, **kwargs)
+
+        return lambda y_hat, y: focal_loss(y_hat, y) + smp.losses.DiceLoss(
+            "multilabel")(y_hat, y)
 
     def get_optimizer(self):
         return torch.optim.Adam
 
     def all_dataloader(self):
         return torch.utils.data.DataLoader(self.all_data,
-                                           batch_size=self.dataset.batch_size,
+                                           batch_size=self.batch_size,
                                            num_workers=self.num_workers,
                                            shuffle=False)
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_data,
-                                           batch_size=self.dataset.batch_size,
+                                           batch_size=self.batch_size,
                                            num_workers=self.num_workers,
                                            shuffle=True,
                                            drop_last=True)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_data,
-                                           batch_size=self.dataset.batch_size,
+                                           batch_size=self.batch_size,
                                            num_workers=self.num_workers,
                                            shuffle=False)
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.test_data,
-                                           batch_size=self.dataset.batch_size,
+                                           batch_size=self.batch_size,
                                            num_workers=self.num_workers,
                                            shuffle=False)
 

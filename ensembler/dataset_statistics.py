@@ -27,7 +27,7 @@ if __name__ == '__main__':
     image_names = dataloader.dataset.get_image_names()
     results = pd.DataFrame(columns=["sample"] + list(dataset.classes),
                            index=range(len(image_names)))
-    batch_size = dataset.batch_size
+    batch_size = dict_args["batch_size"]
 
     statistics_file = os.path.join(outdir, "class_samples.csv")
 
@@ -62,9 +62,3 @@ if __name__ == '__main__':
 
     with open(os.path.join(outdir, "split.json"), "w") as splitfile:
         json.dump(samples, splitfile)
-
-    weights = results.sum(axis=0)[1:]
-    weights = weights.sum() / weights
-
-    print("Weights Class Loss:")
-    print(weights)

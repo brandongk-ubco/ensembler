@@ -10,8 +10,8 @@ from parameters import args
 
 matplotlib.use('Agg')
 
-model = "/mnt/d/work/repos/ensembler/lightning_logs/version_2/checkpoints/epoch=55-step=37687.ckpt"
-outdir = "/mnt/d/work/repos/ensembler/lightning_logs/version_2/predictions/"
+model = "/mnt/d/work/repos/ensembler/lightning_logs/version_8/checkpoints/epoch=21-step=1715.ckpt"
+outdir = "/mnt/d/work/repos/ensembler/lightning_logs/version_8/predictions/"
 
 os.makedirs(outdir, exist_ok=True)
 

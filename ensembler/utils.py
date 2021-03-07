@@ -20,7 +20,7 @@ def split_dataframe(dataframe, percent, seed=42):
                                  index=range(num_first_samples))
     second_samples = pd.DataFrame(columns=dataframe.columns,
                                   index=range(num_second_samples))
-    class_counts = dataframe.astype(bool).sum(axis=0)[1:-1]
+    class_counts = dataframe.astype(bool).sum(axis=0)[2:]
     class_counts.sort_values(inplace=True)
 
     first_idx = 0
@@ -71,3 +71,42 @@ def split_dataframe(dataframe, percent, seed=42):
     assert second_idx == num_second_samples
 
     return first_samples, second_samples
+
+
+def sample_dataframe(dataframe, seed=42):
+    class_counts = dataframe.astype(bool).sum(axis=0)[2:]
+    class_counts.sort_values(inplace=True)
+    sample_count = class_counts.min()
+
+    print("Sampling {} from each class.".format(sample_count))
+
+    samples = pd.DataFrame(columns=dataframe.columns,
+                           index=range(sample_count * len(class_counts)))
+
+    available_samples = dataframe.copy()
+    sample_idx = 0
+    for i, clazz in enumerate(class_counts.index):
+        already_in_dataframe = len(samples[samples[clazz] > 0])
+        class_sample_count = sample_count - already_in_dataframe
+        clazz_df = available_samples[available_samples[clazz] > 0]
+        sampled = clazz_df.sample(n=class_sample_count, random_state=seed)
+
+        samples[sample_idx:sample_idx +
+                class_sample_count] = dataframe[dataframe.index.isin(
+                    sampled.index)]
+
+        available_samples = available_samples[~available_samples.index.
+                                              isin(sampled.index)]
+
+        sample_idx += class_sample_count
+
+    samples = samples.dropna()
+    return samples
+
+
+def weighted_loss(y_hat, y, weights, loss_function):
+    loss = loss_function(y_hat, y).reshape(y.shape)
+    for i, w in enumerate(weights):
+        loss[:, i, :, :] = loss[:, i, :, :] * w
+    loss = loss.mean()
+    return loss

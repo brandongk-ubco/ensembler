@@ -7,7 +7,7 @@ import glob
 
 matplotlib.use('Agg')
 
-outdir = "/mnt/d/work/repos/ensembler/lightning_logs/version_2/predictions/"
+outdir = "/mnt/d/work/repos/ensembler/lightning_logs/version_8/predictions/"
 
 
 def visualize_prediction(src):
