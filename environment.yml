@@ -11,6 +11,7 @@ dependencies:
   - pytorch
   - torchvision
   - torchaudio
+  - cudatoolkit=10.1
   - pip
   - pip:
     - pytorch-lightning==1.1.4

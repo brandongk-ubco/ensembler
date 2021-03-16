@@ -10,6 +10,44 @@ from utils import weighted_loss
 from functools import partial
 
 
+def combined_loss(y_hat, y):
+    try:
+        eps = torch.finfo(y.dtype).eps
+        assert torch.all(y[0, :, :, :] - y[1, :, :, :] <= eps)
+        assert torch.all(y[0, :, :, :] - y[2, :, :, :] <= eps)
+        assert torch.all(y[0, :, :, :] - y[3, :, :, :] <= eps)
+        assert torch.all(y[1, :, :, :] - y[0, :, :, :] <= eps)
+        assert torch.all(y[2, :, :, :] - y[0, :, :, :] <= eps)
+        assert torch.all(y[3, :, :, :] - y[0, :, :, :] <= eps)
+    except AssertionError:
+        print(torch.sum(y[0, :, :, :] - y[1, :, :, :]))
+        print(torch.sum(y[0, :, :, :] - y[2, :, :, :]))
+        print(torch.sum(y[0, :, :, :] - y[3, :, :, :]))
+        import pdb
+        pdb.set_trace()
+
+    return torch.mean(torch.std(y_hat, [0]))
+
+
+def batch_loss(y_hat, y):
+    batches = y_hat.shape[0]
+    loss = 0
+    for batch in range(0, batches, 4):
+        y_hat_batch = y_hat[batch:batch + 4, :, :, :].clone()
+        y_hat_batch[1, :, :, :] = torch.flip(y_hat_batch[1, :, :, :].clone(),
+                                             [1])
+        y_hat_batch[2, :, :, :] = torch.flip(y_hat_batch[2, :, :, :].clone(),
+                                             [2])
+        y_hat_batch[3, :, :, :] = torch.flip(y_hat_batch[3, :, :, :].clone(),
+                                             [1, 2])
+        y_batch = y[batch:batch + 4, :, :, :].clone()
+        y_batch[1, :, :, :] = torch.flip(y_batch[1, :, :, :].clone(), [1])
+        y_batch[2, :, :, :] = torch.flip(y_batch[2, :, :, :].clone(), [2])
+        y_batch[3, :, :, :] = torch.flip(y_batch[3, :, :, :].clone(), [1, 2])
+        loss += combined_loss(y_hat_batch, y_batch)
+    return loss
+
+
 class Segmenter(pl.LightningModule):
     def __init__(self, get_augments, **kwargs):
         super().__init__()
@@ -59,14 +97,8 @@ class Segmenter(pl.LightningModule):
                         activation='softmax2d')
 
     def get_loss(self):
-        kwargs = {
-            "weights": self.dataset.loss_weights,
-            "loss_function": smp.losses.FocalLoss("multilabel", reduction=None)
-        }
-        focal_loss = partial(weighted_loss, **kwargs)
-
-        return lambda y_hat, y: focal_loss(y_hat, y) + smp.losses.DiceLoss(
-            "multilabel")(y_hat, y)
+        return lambda y_hat, y: smp.losses.FocalLoss("multilabel")(
+            y_hat, y) + smp.losses.DiceLoss("multilabel")(y_hat, y)
 
     def get_optimizer(self):
         return torch.optim.Adam
@@ -81,8 +113,8 @@ class Segmenter(pl.LightningModule):
         return torch.utils.data.DataLoader(self.train_data,
                                            batch_size=self.batch_size,
                                            num_workers=self.num_workers,
-                                           shuffle=True,
-                                           drop_last=True)
+                                           shuffle=False,
+                                           drop_last=False)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_data,

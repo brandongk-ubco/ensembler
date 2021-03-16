@@ -4,6 +4,9 @@ import pandas as pd
 def RoundUp(x, mul):
     return ((x + mul - 1) & (-mul))
 
+def ds_combination(a, b):
+    
+
 
 def split_dataframe(dataframe, percent, seed=42):
 
@@ -105,8 +108,9 @@ def sample_dataframe(dataframe, seed=42):
 
 
 def weighted_loss(y_hat, y, weights, loss_function):
-    loss = loss_function(y_hat, y).reshape(y.shape)
+    loss = 0
     for i, w in enumerate(weights):
-        loss[:, i, :, :] = loss[:, i, :, :] * w
+        loss += loss_function(y_hat[:, i, :, :].clone(),
+                              y[:, i, :, :].clone()).mean() * w
     loss = loss.mean()
     return loss
