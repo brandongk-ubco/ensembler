@@ -22,8 +22,8 @@ class AugmentedDataset:
         image = image.transpose(2, 0, 1)
         mask = mask.transpose(2, 0, 1)
 
-        image = torch.from_numpy(image)
-        mask = torch.from_numpy(mask)
+        image = torch.tensor(image)
+        mask = torch.tensor(mask)
 
         return image, mask
 
@@ -31,7 +31,5 @@ class AugmentedDataset:
 class DatasetAugmenter(AugmentedDataset):
     def __getitem__(self, idx):
         image, mask = super().__getitem__(idx)
-
-        mask[mask > 0] = 1.
 
         return image, mask

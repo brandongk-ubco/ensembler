@@ -59,14 +59,19 @@ class Segmenter(pl.LightningModule):
                         activation='softmax2d')
 
     def get_loss(self):
-        kwargs = {
+        focal_kwargs = {
             "weights": self.dataset.loss_weights,
-            "loss_function": smp.losses.FocalLoss("multilabel", reduction=None)
+            "loss_function": smp.losses.FocalLoss("binary", reduction=None)
         }
-        focal_loss = partial(weighted_loss, **kwargs)
+        focal_loss = partial(weighted_loss, **focal_kwargs)
 
-        return lambda y_hat, y: focal_loss(y_hat, y) + smp.losses.DiceLoss(
-            "multilabel")(y_hat, y)
+        dice_kwargs = {
+            "weights": self.dataset.loss_weights,
+            "loss_function": smp.losses.DiceLoss("binary")
+        }
+        dice_loss = partial(weighted_loss, **dice_kwargs)
+
+        return lambda y_hat, y: focal_loss(y_hat, y) + dice_loss(y_hat, y)
 
     def get_optimizer(self):
         return torch.optim.Adam
