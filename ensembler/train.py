@@ -12,7 +12,6 @@ import cv2
 from parameters import args
 from datasets import Datasets
 
-pl.seed_everything(42)
 matplotlib.use('Agg')
 
 patience = 10
@@ -89,6 +88,8 @@ def get_augments(image_height, image_width):
 
 
 if __name__ == '__main__':
+
+    pl.seed_everything(42)
 
     callbacks = [
         pl.callbacks.EarlyStopping('val_loss', patience=2 * patience),

@@ -39,8 +39,6 @@ class AugmentedDataset:
 
         eps = np.finfo(mask.dtype).eps
 
-        image = torch.tensor(image)
-        mask = torch.tensor(mask)
         coverage = mask.sum(0).sum(0)
         coverage_percent = coverage / coverage.sum()
         coverage_percent = np.clip(coverage_percent, a_min=eps, a_max=1.)

@@ -10,28 +10,13 @@ from utils import weighted_loss
 from functools import partial
 
 
-def combined_loss(y_hat, y):
-    try:
-        eps = torch.finfo(y.dtype).eps
-        assert torch.all(y[0, :, :, :] - y[1, :, :, :] <= eps)
-        assert torch.all(y[0, :, :, :] - y[2, :, :, :] <= eps)
-        assert torch.all(y[0, :, :, :] - y[3, :, :, :] <= eps)
-        assert torch.all(y[1, :, :, :] - y[0, :, :, :] <= eps)
-        assert torch.all(y[2, :, :, :] - y[0, :, :, :] <= eps)
-        assert torch.all(y[3, :, :, :] - y[0, :, :, :] <= eps)
-    except AssertionError:
-        print(torch.sum(y[0, :, :, :] - y[1, :, :, :]))
-        print(torch.sum(y[0, :, :, :] - y[2, :, :, :]))
-        print(torch.sum(y[0, :, :, :] - y[3, :, :, :]))
-        import pdb
-        pdb.set_trace()
+def batch_loss(y_hat,
+               y,
+               reduction=partial(torch.mean, **{"dim": [0]}),
+               loss=smp.losses.FocalLoss("multilabel")):
 
-    return torch.mean(torch.std(y_hat, [0]))
-
-
-def batch_loss(y_hat, y):
     batches = y_hat.shape[0]
-    loss = 0
+    loss_val = 0
     for batch in range(0, batches, 4):
         y_hat_batch = y_hat[batch:batch + 4, :, :, :].clone()
         y_hat_batch[1, :, :, :] = torch.flip(y_hat_batch[1, :, :, :].clone(),
@@ -44,8 +29,26 @@ def batch_loss(y_hat, y):
         y_batch[1, :, :, :] = torch.flip(y_batch[1, :, :, :].clone(), [1])
         y_batch[2, :, :, :] = torch.flip(y_batch[2, :, :, :].clone(), [2])
         y_batch[3, :, :, :] = torch.flip(y_batch[3, :, :, :].clone(), [1, 2])
-        loss += combined_loss(y_hat_batch, y_batch)
-    return loss
+
+        try:
+            eps = torch.finfo(y.dtype).eps
+            assert torch.all(y_batch[0, :, :, :] - y_batch[1, :, :, :] <= eps)
+            assert torch.all(y_batch[0, :, :, :] - y_batch[2, :, :, :] <= eps)
+            assert torch.all(y_batch[0, :, :, :] - y_batch[3, :, :, :] <= eps)
+            assert torch.all(y_batch[1, :, :, :] - y_batch[0, :, :, :] <= eps)
+            assert torch.all(y_batch[2, :, :, :] - y_batch[0, :, :, :] <= eps)
+            assert torch.all(y_batch[3, :, :, :] - y_batch[0, :, :, :] <= eps)
+        except AssertionError:
+            print(torch.sum(y_batch[0, :, :, :] - y_batch[1, :, :, :]))
+            print(torch.sum(y_batch[0, :, :, :] - y_batch[2, :, :, :]))
+            print(torch.sum(y_batch[0, :, :, :] - y_batch[3, :, :, :]))
+
+        y_hat_batch = reduction(y_hat_batch)
+        y_batch = y_batch[0, :, :, :]
+
+        loss_val += loss(y_hat_batch, y_batch)
+
+    return loss_val
 
 
 class Segmenter(pl.LightningModule):
@@ -109,9 +112,10 @@ class Segmenter(pl.LightningModule):
         }
         dice_loss = partial(weighted_loss, **dice_kwargs)
 
-        return lambda y_hat, y: focal_loss(y_hat, y) + dice_loss(y_hat, y)
-        # return lambda y_hat, y: smp.losses.FocalLoss("multilabel")(
-        #     y_hat, y) + smp.losses.DiceLoss("multilabel")(y_hat, y)
+        # return lambda y_hat, y: focal_loss(y_hat, y) + dice_loss(y_hat, y)
+        return lambda y_hat, y: smp.losses.FocalLoss("multilabel")(
+            y_hat, y) + smp.losses.DiceLoss("multilabel")(
+                y_hat, y) + batch_loss(y_hat, y)
 
     def get_optimizer(self):
         return torch.optim.Adam
@@ -184,38 +188,60 @@ class Segmenter(pl.LightningModule):
         except AttributeError:
             return
 
-        for i in range(x.shape[0]):
-            img = x[i, :, :, :]
-            mask = y[i, :, :, :]
-            predicted_mask = y_hat[i, :, :, :]
+        y_hat[1, :, :, :] = np.flip(y_hat[1, :, :, :], [1])
+        y_hat[2, :, :, :] = np.flip(y_hat[2, :, :, :], [2])
+        y_hat[3, :, :, :] = np.flip(y_hat[3, :, :, :], [1, 2])
 
-            img = img.transpose(1, 2, 0)
-            mask = mask.transpose(1, 2, 0)
-            predicted_mask = predicted_mask.transpose(1, 2, 0)
+        img = x[0, :, :, :]
+        mask = y[0, :, :, :]
+        predicted_mask = np.mean(y_hat, 0)
 
-            mask_img = np.argmax(mask, axis=2) * self.intensity
+        img = img.transpose(1, 2, 0)
+        mask = mask.transpose(1, 2, 0)
+        predicted_mask = predicted_mask.transpose(1, 2, 0)
 
-            predicted_mask_img = np.argmax(predicted_mask,
-                                           axis=2) * self.intensity
+        predicted_mask_0 = y_hat[0, :, :, :].transpose(1, 2, 0)
+        predicted_mask_1 = y_hat[1, :, :, :].transpose(1, 2, 0)
+        predicted_mask_2 = y_hat[2, :, :, :].transpose(1, 2, 0)
+        predicted_mask_3 = y_hat[3, :, :, :].transpose(1, 2, 0)
 
-            fig, (ax1, ax2, ax3) = plt.subplots(3, 1)
+        mask_img = np.argmax(mask, axis=2) * self.intensity
 
-            if img.shape[2] == 1:
-                ax1.imshow(img.squeeze(), cmap="gray")
-            else:
-                ax1.imshow(img, cmap="gray")
+        predicted_mask_img = np.argmax(predicted_mask, axis=2) * self.intensity
 
-            ax2.imshow(mask_img, cmap="gray", vmin=0, vmax=255)
-            ax3.imshow(predicted_mask_img, cmap="gray", vmin=0, vmax=255)
-            ax1.axis('off')
-            ax2.axis('off')
-            ax3.axis('off')
+        predicted_mask_0_img = np.argmax(predicted_mask_0,
+                                         axis=2) * self.intensity
+        predicted_mask_1_img = np.argmax(predicted_mask_1,
+                                         axis=2) * self.intensity
+        predicted_mask_2_img = np.argmax(predicted_mask_2,
+                                         axis=2) * self.intensity
+        predicted_mask_3_img = np.argmax(predicted_mask_3,
+                                         axis=2) * self.intensity
 
-            outfile = os.path.join(self.logger.log_dir,
-                                   "{}_{}.png".format(batch_idx, i))
+        fig, axs = plt.subplots(3, 3)
 
-            if os.path.exists(outfile):
-                os.remove(outfile)
+        if img.shape[2] == 1:
+            axs[0][0].imshow(img.squeeze(), cmap="gray")
+        else:
+            axs[0][0].imshow(img, cmap="gray")
 
-            plt.savefig(outfile)
-            plt.close()
+        axs[0][1].imshow(mask_img, cmap="gray", vmin=0, vmax=255)
+        axs[0][2].imshow(predicted_mask_img, cmap="gray", vmin=0, vmax=255)
+
+        axs[1][0].imshow(predicted_mask_0_img, cmap="gray", vmin=0, vmax=255)
+        axs[1][1].imshow(predicted_mask_1_img, cmap="gray", vmin=0, vmax=255)
+
+        axs[2][0].imshow(predicted_mask_2_img, cmap="gray", vmin=0, vmax=255)
+        axs[2][1].imshow(predicted_mask_3_img, cmap="gray", vmin=0, vmax=255)
+
+        for ax_i in axs:
+            for ax_j in ax_i:
+                ax_j.axis('off')
+
+        outfile = os.path.join(self.logger.log_dir, "{}.png".format(batch_idx))
+
+        if os.path.exists(outfile):
+            os.remove(outfile)
+
+        plt.savefig(outfile)
+        plt.close()
