@@ -11,6 +11,7 @@ image_height = 512
 image_width = 512
 num_classes = 21
 batch_size = 8
+loss_weights = [1.] * num_classes
 
 voc_folder = "/mnt/d/work/datasets/voc"
 
@@ -35,10 +36,10 @@ class VOCDataset(Dataset):
 
         if split == "train":
             self.data = torchvision.datasets.VOCSegmentation(voc_folder,
-                                                             image_set='train')
+                                                             image_set='train', download=not os.path.exists(voc_folder))
         elif split == "val":
             self.data = torchvision.datasets.VOCSegmentation(voc_folder,
-                                                             image_set='val')
+                                                             image_set='val', download=not os.path.exists(voc_folder))
         elif split == "test":
             raise ValueError("Test split not implemented.")
         else:
@@ -103,13 +104,13 @@ class VOCDataset(Dataset):
         return self.load_image(self.samples[idx])
 
 
-def get_dataloaders(augmentations):
-    train_transform, val_transform, test_transform = augmentations
+def get_dataloaders(voc_folder, augmentations):
 
     train_data = VOCDataset(voc_folder, split="train")
     val_data = VOCDataset(voc_folder, split="val")
     test_data = VOCDataset(voc_folder, split="val")
 
+    train_transform, val_transform, test_transform = augmentations
     train_data = DatasetAugmenter(train_data, train_transform)
     val_data = DatasetAugmenter(val_data, val_transform)
     test_data = DatasetAugmenter(test_data, test_transform)

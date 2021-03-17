@@ -1,8 +1,26 @@
 import pandas as pd
+import torch
 
 
 def RoundUp(x, mul):
     return ((x + mul - 1) & (-mul))
+
+
+def ds_combination(sensor_one, sensor_two):
+    assert sensor_one.shape == sensor_two.shape
+    assert len(sensor_one.shape) == 1
+    num_elems = sensor_one.shape[0]
+    tiled_sensor_one = sensor_one.repeat(num_elems, 1)
+    tiled_sensor_two = sensor_two.repeat(num_elems, 1).transpose(0, 1)
+    multiplied = tiled_sensor_one * tiled_sensor_two
+    belief = torch.diagonal(multiplied)
+    eps = torch.finfo(belief.dtype).eps
+
+    if torch.all(belief < eps):
+        return belief
+
+    disbelief = 1 - (torch.sum(multiplied) - torch.sum(belief))
+    return belief / disbelief
 
 
 def split_dataframe(dataframe, percent, seed=42):

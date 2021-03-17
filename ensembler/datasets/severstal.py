@@ -11,7 +11,8 @@ from utils import split_dataframe, sample_dataframe
 image_height = 256
 image_width = 1600
 num_classes = 5
-loss_weights = [1.063732, 697.93036, 3272.005379, 20.793984, 99.165978]
+# loss_weights = [1.063732, 697.93036, 3272.005379, 20.793984, 99.165978]
+loss_weights = [1.] * num_classes
 classes = {"background": 0, "1": 50, "2": 100, "3": 200, "4": 250}
 num_channels = 1
 

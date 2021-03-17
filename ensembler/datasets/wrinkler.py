@@ -8,8 +8,8 @@ import pandas as pd
 from utils import split_dataframe, sample_dataframe
 import json
 
-image_height = 1792
-image_width = 2048
+image_height = 768
+image_width = 1024
 num_classes = 4
 loss_weights = [0.5, 1, 10, 1]
 classes = {"background": 0, "gripper": 50, "wrinkle": 100, "fabric": 200}
