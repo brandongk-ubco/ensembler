@@ -14,7 +14,7 @@ def ds_combination(sensor_one, sensor_two):
     tiled_sensor_two = sensor_two.repeat(num_elems, 1).transpose(0, 1)
     multiplied = tiled_sensor_one * tiled_sensor_two
     belief = torch.diagonal(multiplied)
-    eps = torch.finfo(belief.dtype).eps
+    eps = 1e-7
 
     if torch.all(belief < eps):
         return belief

@@ -6,8 +6,38 @@ import os
 from matplotlib import pyplot as plt
 from argparse import ArgumentParser
 from datasets import Datasets
-from utils import weighted_loss
+from utils import weighted_loss, ds_combination
 from functools import partial
+from typing import List
+
+
+def ds_reduce_column(x: int, y: int, y_hat, reduced) -> torch.Tensor:
+    for k in range(1, y_hat.shape[0]):
+        reduced[:, x, y] = ds_combination(reduced[:, x, y], y_hat[k, :, x, y])
+    return torch.empty(0)
+
+
+@torch.jit.script
+def ds_reduce(y_hat):
+    futures: List[torch.jit.Future[torch.Tensor]] = []
+    reduced = y_hat[0, :, :, :].clone()
+    expected = y_hat.shape[2] * y_hat.shape[3]
+
+    i = 0
+
+    for x in range(y_hat.shape[2]):
+        for y in range(y_hat.shape[3]):
+            if len(futures) > 100:
+                for x, future in enumerate(futures):
+                    if i % 10000 == 0:
+                        print(i / expected)
+                    i += 1
+                    torch.jit.wait(future)
+                futures.clear()
+            futures.append(
+                torch.jit.fork(ds_reduce_column, x, y, y_hat, reduced))
+
+    return reduced
 
 
 def batch_loss(y_hat,
@@ -92,12 +122,26 @@ class Segmenter(pl.LightningModule):
         return parser
 
     def get_model(self):
-        return smp.Unet(encoder_name=self.encoder_name,
-                        encoder_weights=None,
-                        encoder_depth=self.depth,
-                        in_channels=self.dataset.num_channels,
-                        classes=self.dataset.num_classes,
-                        activation='softmax2d')
+        model = smp.Unet(encoder_name=self.encoder_name,
+                         encoder_weights=None,
+                         encoder_depth=self.depth,
+                         in_channels=self.dataset.num_channels,
+                         classes=self.dataset.num_classes,
+                         activation='softmax2d')
+        model.apply(self.initialize_weights)
+        return model
+
+    def initialize_weights(self, m):
+        if isinstance(m, torch.nn.Conv2d):
+            torch.nn.init.kaiming_uniform_(m.weight.data, nonlinearity='relu')
+            if m.bias is not None:
+                torch.nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, torch.nn.BatchNorm2d):
+            torch.nn.init.constant_(m.weight.data, 1)
+            torch.nn.init.constant_(m.bias.data, 0)
+        elif isinstance(m, torch.nn.Linear):
+            torch.nn.init.kaiming_uniform_(m.weight.data)
+            torch.nn.init.constant_(m.bias.data, 0)
 
     def get_loss(self):
         focal_kwargs = {
@@ -106,16 +150,14 @@ class Segmenter(pl.LightningModule):
         }
         focal_loss = partial(weighted_loss, **focal_kwargs)
 
-        dice_kwargs = {
-            "weights": self.dataset.loss_weights,
-            "loss_function": smp.losses.DiceLoss("binary")
+        minimize_diversity_kwargs = {
+            "reduction": partial(torch.std, **{"dim": [0]}),
+            "loss": lambda y_hat, y: torch.mean(y_hat)
         }
-        dice_loss = partial(weighted_loss, **dice_kwargs)
+        minimize_diversity = partial(batch_loss, **minimize_diversity_kwargs)
 
-        # return lambda y_hat, y: focal_loss(y_hat, y) + dice_loss(y_hat, y)
-        return lambda y_hat, y: smp.losses.FocalLoss("multilabel")(
-            y_hat, y) + smp.losses.DiceLoss("multilabel")(
-                y_hat, y) + batch_loss(y_hat, y)
+        return lambda y_hat, y: focal_loss(y_hat, y) + batch_loss(
+            y_hat, y) + minimize_diversity(y_hat, y)
 
     def get_optimizer(self):
         return torch.optim.Adam
