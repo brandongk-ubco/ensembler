@@ -7,8 +7,7 @@ import albumentations as A
 import UNetEncoder
 import os
 import json
-from torchinfo import summary
-import cv2
+# from torchinfo import summary
 from parameters import args
 from datasets import Datasets
 
@@ -48,17 +47,17 @@ class RecordTrainStatus(pl.callbacks.Callback):
             json.dump(state, statefile, indent=4)
 
 
-class ModelSummary(pl.callbacks.Callback):
-    def on_sanity_check_end(self, trainer, pl_module):
-        dataloader = trainer.val_dataloaders[0]
-        batch = next(iter(dataloader))
-        model_summary = summary(trainer.model,
-                                input_size=tuple(batch[0].shape),
-                                verbose=0)
-        print(model_summary)
-        with open(os.path.join(trainer.logger.log_dir, "model.txt"),
-                  "w") as modelfile:
-            modelfile.write(str(model_summary))
+# class ModelSummary(pl.callbacks.Callback):
+#     def on_sanity_check_end(self, trainer, pl_module):
+#         dataloader = trainer.val_dataloaders[0]
+#         batch = next(iter(dataloader))
+#         model_summary = summary(trainer.model,
+#                                 input_size=tuple(batch[0].shape),
+#                                 verbose=0)
+#         print(model_summary)
+#         with open(os.path.join(trainer.logger.log_dir, "model.txt"),
+#                   "w") as modelfile:
+#             modelfile.write(str(model_summary))
 
 
 def get_augments(image_height, image_width):
