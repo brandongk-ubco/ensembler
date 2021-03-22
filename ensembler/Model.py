@@ -144,20 +144,8 @@ class Segmenter(pl.LightningModule):
             torch.nn.init.constant_(m.bias.data, 0)
 
     def get_loss(self):
-        focal_kwargs = {
-            "weights": self.dataset.loss_weights,
-            "loss_function": smp.losses.FocalLoss("binary", reduction=None)
-        }
-        focal_loss = partial(weighted_loss, **focal_kwargs)
-
-        minimize_diversity_kwargs = {
-            "reduction": partial(torch.std, **{"dim": [0]}),
-            "loss": lambda y_hat, y: torch.mean(y_hat)
-        }
-        minimize_diversity = partial(batch_loss, **minimize_diversity_kwargs)
-
-        return lambda y_hat, y: focal_loss(y_hat, y) + batch_loss(
-            y_hat, y) + minimize_diversity(y_hat, y)
+        return lambda y_hat, y: smp.losses.FocalLoss("multilabel")(
+            y_hat, y) + smp.losses.DiceLoss("multilabel")(y_hat, y)
 
     def get_optimizer(self):
         return torch.optim.Adam
@@ -222,6 +210,7 @@ class Segmenter(pl.LightningModule):
         }
 
     def write_predictions(self, x, y, y_hat, batch_idx):
+
         if batch_idx >= self.batches_to_write:
             return
 
@@ -230,60 +219,38 @@ class Segmenter(pl.LightningModule):
         except AttributeError:
             return
 
-        y_hat[1, :, :, :] = np.flip(y_hat[1, :, :, :], [1])
-        y_hat[2, :, :, :] = np.flip(y_hat[2, :, :, :], [2])
-        y_hat[3, :, :, :] = np.flip(y_hat[3, :, :, :], [1, 2])
+        for i in range(y_hat.shape[0]):
+            img = x[i, :, :, :]
+            mask = y[i, :, :, :]
+            predicted_mask = y_hat[i, :, :, :]
 
-        img = x[0, :, :, :]
-        mask = y[0, :, :, :]
-        predicted_mask = np.mean(y_hat, 0)
+            img = img.transpose(1, 2, 0)
+            mask = mask.transpose(1, 2, 0)
+            predicted_mask = predicted_mask.transpose(1, 2, 0)
 
-        img = img.transpose(1, 2, 0)
-        mask = mask.transpose(1, 2, 0)
-        predicted_mask = predicted_mask.transpose(1, 2, 0)
+            mask_img = np.argmax(mask, axis=2) * self.intensity
 
-        predicted_mask_0 = y_hat[0, :, :, :].transpose(1, 2, 0)
-        predicted_mask_1 = y_hat[1, :, :, :].transpose(1, 2, 0)
-        predicted_mask_2 = y_hat[2, :, :, :].transpose(1, 2, 0)
-        predicted_mask_3 = y_hat[3, :, :, :].transpose(1, 2, 0)
+            predicted_mask_img = np.argmax(predicted_mask,
+                                           axis=2) * self.intensity
 
-        mask_img = np.argmax(mask, axis=2) * self.intensity
+            fig, axs = plt.subplots(3, 1)
 
-        predicted_mask_img = np.argmax(predicted_mask, axis=2) * self.intensity
+            if img.shape[2] == 1:
+                axs[0].imshow(img.squeeze(), cmap="gray")
+            else:
+                axs[0].imshow(img, cmap="gray")
 
-        predicted_mask_0_img = np.argmax(predicted_mask_0,
-                                         axis=2) * self.intensity
-        predicted_mask_1_img = np.argmax(predicted_mask_1,
-                                         axis=2) * self.intensity
-        predicted_mask_2_img = np.argmax(predicted_mask_2,
-                                         axis=2) * self.intensity
-        predicted_mask_3_img = np.argmax(predicted_mask_3,
-                                         axis=2) * self.intensity
+            axs[1].imshow(mask_img, cmap="gray", vmin=0, vmax=255)
+            axs[2].imshow(predicted_mask_img, cmap="gray", vmin=0, vmax=255)
 
-        fig, axs = plt.subplots(3, 3)
+            for ax_i in axs:
+                ax_i.axis('off')
 
-        if img.shape[2] == 1:
-            axs[0][0].imshow(img.squeeze(), cmap="gray")
-        else:
-            axs[0][0].imshow(img, cmap="gray")
+            outfile = os.path.join(self.logger.log_dir,
+                                   "{}_{}.png".format(batch_idx, i))
 
-        axs[0][1].imshow(mask_img, cmap="gray", vmin=0, vmax=255)
-        axs[0][2].imshow(predicted_mask_img, cmap="gray", vmin=0, vmax=255)
+            if os.path.exists(outfile):
+                os.remove(outfile)
 
-        axs[1][0].imshow(predicted_mask_0_img, cmap="gray", vmin=0, vmax=255)
-        axs[1][1].imshow(predicted_mask_1_img, cmap="gray", vmin=0, vmax=255)
-
-        axs[2][0].imshow(predicted_mask_2_img, cmap="gray", vmin=0, vmax=255)
-        axs[2][1].imshow(predicted_mask_3_img, cmap="gray", vmin=0, vmax=255)
-
-        for ax_i in axs:
-            for ax_j in ax_i:
-                ax_j.axis('off')
-
-        outfile = os.path.join(self.logger.log_dir, "{}.png".format(batch_idx))
-
-        if os.path.exists(outfile):
-            os.remove(outfile)
-
-        plt.savefig(outfile)
-        plt.close()
+            plt.savefig(outfile)
+            plt.close()
