@@ -1,0 +1,13 @@
+torch
+torchvision
+torchtext
+torchaudio
+pytorch_lightning
+opencv_python_headless
+scikit-learn
+pytest
+pytest-cov
+flake8
+scikit-image
+imgaug
+
