@@ -5,7 +5,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --mem=32000M
 #SBATCH --cpus-per-task=6
-#SBATCH --time=0-2:50:00
+#SBATCH --time=0-3:00:00
 #SBATCH --signal=SIGUSR1@90
 
 module load python/3.7

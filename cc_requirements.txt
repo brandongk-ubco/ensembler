@@ -10,4 +10,5 @@ pytest-cov
 flake8
 scikit-image
 imgaug
+pandas
 
