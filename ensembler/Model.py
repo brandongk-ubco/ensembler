@@ -150,14 +150,13 @@ class Segmenter(pl.LightningModule):
         }
         focal_loss = partial(weighted_loss, **focal_kwargs)
 
-        minimize_diversity_kwargs = {
-            "reduction": partial(torch.std, **{"dim": [0]}),
-            "loss": lambda y_hat, y: torch.mean(y_hat)
-        }
-        minimize_diversity = partial(batch_loss, **minimize_diversity_kwargs)
+        # minimize_diversity_kwargs = {
+        #     "reduction": partial(torch.std, **{"dim": [0]}),
+        #     "loss": lambda y_hat, y: torch.mean(y_hat)
+        # }
+        # minimize_diversity = partial(batch_loss, **minimize_diversity_kwargs)
 
-        return lambda y_hat, y: focal_loss(y_hat, y) + batch_loss(
-            y_hat, y) + minimize_diversity(y_hat, y)
+        return lambda y_hat, y: focal_loss(y_hat, y) + batch_loss(y_hat, y)
 
     def get_optimizer(self):
         return torch.optim.Adam
