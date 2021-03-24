@@ -72,6 +72,8 @@ def batch_loss(y_hat,
             print(torch.sum(y_batch[0, :, :, :] - y_batch[1, :, :, :]))
             print(torch.sum(y_batch[0, :, :, :] - y_batch[2, :, :, :]))
             print(torch.sum(y_batch[0, :, :, :] - y_batch[3, :, :, :]))
+            import pdb
+            pdb.set_trace()
 
         y_hat_batch = reduction(y_hat_batch)
         y_batch = y_batch[0, :, :, :]
@@ -165,7 +167,8 @@ class Segmenter(pl.LightningModule):
         return torch.utils.data.DataLoader(self.all_data,
                                            batch_size=self.batch_size,
                                            num_workers=self.num_workers,
-                                           shuffle=False)
+                                           shuffle=False,
+                                           drop_last=False)
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_data,
@@ -178,13 +181,15 @@ class Segmenter(pl.LightningModule):
         return torch.utils.data.DataLoader(self.val_data,
                                            batch_size=self.batch_size,
                                            num_workers=self.num_workers,
-                                           shuffle=False)
+                                           shuffle=False,
+                                           drop_last=False)
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.test_data,
                                            batch_size=self.batch_size,
                                            num_workers=self.num_workers,
-                                           shuffle=False)
+                                           shuffle=False,
+                                           drop_last=False)
 
     def training_step(self, batch, batch_idx):
         x, y = batch

@@ -19,7 +19,7 @@ class AugmentedDataset:
         self.transform = transform
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self.dataset) * 4
 
     def __getitem__(self, idx):
         image, mask = self.dataset.__getitem__(idx)
@@ -64,8 +64,31 @@ class AugmentedDataset:
 
 
 class DatasetAugmenter(AugmentedDataset):
-    def __getitem__(self, idx):
 
-        image, mask = super().__getitem__(idx)
+    lastItem = None
+
+    def __getitem__(self, idx):
+        dataset_idx = idx // 4
+        flip_idx = idx % 4
+
+        if flip_idx == 0:
+            self.lastItem = super().__getitem__(dataset_idx)
+
+        image, mask = self.lastItem
+
+        if flip_idx == 0:
+            pass
+
+        if flip_idx == 1:
+            image = torch.flip(image, [1])
+            mask = torch.flip(mask, [1])
+
+        if flip_idx == 2:
+            image = torch.flip(image, [2])
+            mask = torch.flip(mask, [2])
+
+        if flip_idx == 3:
+            image = torch.flip(image, [1, 2])
+            mask = torch.flip(mask, [1, 2])
 
         return image, mask
