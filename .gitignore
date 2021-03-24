@@ -2,6 +2,9 @@ tmp.py
 image.sif
 *logs/
 *.png
+local.env
+*.out
+condaenv.*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

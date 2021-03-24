@@ -111,7 +111,7 @@ def sample_dataframe(dataframe, seed=42):
 
         samples[sample_idx:sample_idx +
                 class_sample_count] = dataframe[dataframe.index.isin(
-                    sampled.index)]
+                    sampled.index)].reset_index().drop(["index"], axis=1)
 
         available_samples = available_samples[~available_samples.index.
                                               isin(sampled.index)]

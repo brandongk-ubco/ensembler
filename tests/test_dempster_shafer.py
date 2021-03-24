@@ -2,7 +2,7 @@ from ensembler.utils import ds_combination
 import torch
 
 
-class TestReporter:
+class TestDempsterShafer:
     def test_ds_combination_all_agree(self):
         a = torch.FloatTensor([0, 1, 0])
         b = torch.FloatTensor([0, 1, 0])
