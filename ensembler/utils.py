@@ -64,13 +64,25 @@ def split_dataframe(dataframe, percent, seed=42):
         clazz_second_samples = clazz_df[~clazz_df.index.
                                         isin(clazz_first_samples.index)]
 
-        second_samples[second_idx:second_idx +
-                       num_class_second_samples] = dataframe[
-                           dataframe.index.isin(clazz_second_samples.index)]
+        second_sample_rows = second_samples.iloc[second_idx:second_idx +
+                                                 num_class_second_samples]
 
-        first_samples[first_idx:first_idx +
-                      num_class_first_samples] = dataframe[
-                          dataframe.index.isin(clazz_first_samples.index)]
+        new_second_samples = dataframe[dataframe.index.isin(
+            clazz_second_samples.index)]
+        new_second_samples.index = second_sample_rows.index
+
+        second_samples.iloc[second_idx:second_idx +
+                            num_class_second_samples] = new_second_samples
+
+        first_sample_rows = first_samples.iloc[first_idx:first_idx +
+                                               num_class_first_samples]
+
+        new_first_samples = dataframe[dataframe.index.isin(
+            clazz_first_samples.index)]
+        new_first_samples.index = first_sample_rows.index
+
+        first_samples.iloc[first_idx:first_idx +
+                           num_class_first_samples] = new_first_samples
 
         available_samples = available_samples[~available_samples.index.
                                               isin(clazz_df.index)]
