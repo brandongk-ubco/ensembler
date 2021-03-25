@@ -9,14 +9,13 @@ description = "Train a model."
 
 
 def add_argparse_args(parser):
-    parser.add_argument('--data_dir',
-                        type=str,
-                        nargs='?',
-                        const=os.environ.get("DATA_DIR", None),
-                        default=os.environ.get("DATA_DIR", None))
+    parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--num_workers', type=int, default=os.cpu_count() // 2)
     parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--dataset_split_seed', type=int, default=42)
+    parser.add_argument('--seed', type=int, default=42)
     parser = model.add_model_specific_args(parser)
+    return parser
 
 
 def execute(args):

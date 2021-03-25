@@ -17,7 +17,7 @@ class Segmenter(pl.LightningModule):
         self.hparams = kwargs
         self.patience = self.hparams["patience"]
         self.dataset = Datasets.get(self.hparams["dataset"])
-        self.train_data, self.val_data, self.test_data, self.all_data = self.dataset.get_dataloaders(
+        self.train_data, self.val_data, self.test_data = self.dataset.get_dataloaders(
             os.path.join(self.hparams["data_dir"], self.hparams["dataset"]),
             get_augments(self.dataset.image_height, self.dataset.image_width))
         self.encoder_name = self.hparams["encoder_name"]
@@ -33,15 +33,11 @@ class Segmenter(pl.LightningModule):
         self.model = self.get_model()
 
     @staticmethod
-    def add_model_specific_args(parent_parser):
-        parser = ArgumentParser(parents=[parent_parser], add_help=False)
+    def add_model_specific_args(parser):
         parser.add_argument('--encoder_name',
                             type=str,
                             default="efficientnet-b0")
-        parser.add_argument('--patience', type=int, default=10)
         parser.add_argument('--depth', type=int, default=5)
-
-        return parser
 
     def get_model(self):
         model = smp.Unet(encoder_name=self.encoder_name,

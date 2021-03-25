@@ -3,18 +3,12 @@ from tqdm import tqdm
 import pandas as pd
 import json
 from ensembler.datasets import split_dataset, Datasets
-from ensembler.augments import get_augments
 import torch
 
 description = "Prepare dataset statistics required for sampling."
 
 
 def add_argparse_args(parser):
-    parser.add_argument('--data_dir',
-                        type=str,
-                        nargs='?',
-                        const=os.environ.get("DATA_DIR", None),
-                        default=os.environ.get("DATA_DIR", None))
     parser.add_argument('--num_workers', type=int, default=os.cpu_count() // 2)
 
 
@@ -25,9 +19,8 @@ def execute(args):
     outdir = os.path.join(dict_args["data_dir"], dict_args["dataset"])
 
     dataset = Datasets.get(dict_args["dataset"])
-    train_data, val_data, test_data, all_data = dataset.get_dataloaders(
-        os.path.join(dict_args["data_dir"], dict_args["dataset"]),
-        get_augments(dataset.image_height, dataset.image_width))
+    all_data = dataset.get_all_dataloader(
+        os.path.join(dict_args["data_dir"], dict_args["dataset"]))
 
     dataloader = torch.utils.data.DataLoader(
         all_data,
