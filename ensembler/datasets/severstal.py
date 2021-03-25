@@ -1,12 +1,11 @@
-import glob
 import torch
 from torch.utils.data import Dataset
 import os
 import json
 import numpy as np
-from datasets.AugmentedDataset import DatasetAugmenter
 import pandas as pd
-from utils import split_dataframe, sample_dataframe
+from ensembler.datasets.AugmentedDataset import DatasetAugmenter
+from ensembler.datasets.helpers import split_dataset, sample_dataset
 
 image_height = 256
 image_width = 1600
@@ -38,8 +37,8 @@ class SeverstalDataset(Dataset):
         dataset_df = pd.read_csv(statistics_file)
         trainval_df = dataset_df[dataset_df["sample"].isin(trainval_images)]
 
-        trainval_df = sample_dataframe(trainval_df)
-        val_df, train_df = split_dataframe(trainval_df, 10.)
+        trainval_df = sample_dataset(trainval_df)
+        val_df, train_df = split_dataset(trainval_df, 10.)
 
         val_images = val_df["sample"].tolist()
         train_images = train_df["sample"].tolist()

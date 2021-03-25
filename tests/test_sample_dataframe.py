@@ -1,4 +1,4 @@
-from ensembler.utils import sample_dataframe
+from ensembler.datasets.helpers import sample_dataset
 import pandas as pd
 import uuid
 import os
@@ -16,7 +16,7 @@ class TestSampleDataFrame:
             "1": 0.9
         }])
 
-        result = sample_dataframe(df)
+        result = sample_dataset(df)
 
         assert len(result) == 2
         assert result.iloc[0]["sample"] == df.iloc[0]["sample"]
@@ -33,7 +33,7 @@ class TestSampleDataFrame:
             "1": 1
         }])
 
-        result = sample_dataframe(df)
+        result = sample_dataset(df)
 
         assert len(result) == 1
         assert result.iloc[0]["sample"] == df.iloc[1]["sample"]
@@ -49,7 +49,7 @@ class TestSampleDataFrame:
             }]),
                            ignore_index=True)
 
-        result = sample_dataframe(df)
+        result = sample_dataset(df)
 
         assert len(result) == 100
 
@@ -58,7 +58,7 @@ class TestSampleDataFrame:
                                    "class_samples.csv")
         df = pd.read_csv(sample_file)
 
-        result = sample_dataframe(df)
+        result = sample_dataset(df)
 
         assert len(result) == len(df)
         assert len(df[~result.index.isin(df.index)]) == 0

@@ -5,10 +5,10 @@ import numpy as np
 import os
 from matplotlib import pyplot as plt
 from argparse import ArgumentParser
-from datasets import Datasets
 from functools import partial
-from aggregators import batch_loss
-from utils import weighted_loss
+from ensembler.utils import weighted_loss
+from ensembler.aggregators import batch_loss
+from ensembler.datasets import Datasets
 
 
 class Segmenter(pl.LightningModule):

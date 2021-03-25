@@ -6,7 +6,7 @@ import os
 from train import get_augments
 from tqdm import tqdm
 from datasets import Datasets
-from parameters import args
+from ensembler.parameters import args
 
 matplotlib.use('Agg')
 

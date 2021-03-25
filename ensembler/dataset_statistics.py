@@ -1,18 +1,14 @@
-import pytorch_lightning as pl
 import matplotlib
-from Model import Segmenter as model
 import os
-from train import get_augments
 from tqdm import tqdm
-from datasets import Datasets
-from parameters import args
 import pandas as pd
 import json
-from utils import split_dataframe
+from ensembler.datasets import split_dataset, Datasets
+from ensembler.Model import Segmenter as model
+from ensembler.augments import get_augments
 
-matplotlib.use('Agg')
 
-if __name__ == '__main__':
+def execute(args):
 
     dict_args = vars(args)
 
@@ -53,7 +49,7 @@ if __name__ == '__main__':
 
     assert num_images == len(image_names)
 
-    test_images, trainval_images = split_dataframe(results, 15.)
+    test_images, trainval_images = split_dataset(results, 15.)
 
     samples = {
         "trainval": trainval_images["sample"].tolist(),

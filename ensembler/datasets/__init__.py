@@ -1,8 +1,9 @@
 from enum import Enum
-import datasets.voc as voc
-import datasets.cityscapes as cityscapes
-import datasets.wrinkler as wrinkler
-import datasets.severstal as severstal
+from ensembler.datasets.helpers import *
+import ensembler.datasets.voc as voc
+import ensembler.datasets.cityscapes as cityscapes
+import ensembler.datasets.wrinkler as wrinkler
+import ensembler.datasets.severstal as severstal
 
 
 class Datasets(Enum):

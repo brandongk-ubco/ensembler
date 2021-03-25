@@ -31,7 +31,7 @@ class AugmentedDataset:
             image[:, :, 2] = contrast_stretch(image[:, :, 2])
             image = hsv2rgb(image)
         elif image.shape[2] == 1:
-            image[:, :, 1] = contrast_stretch(image[:, :, 1])
+            image = contrast_stretch(image)
         else:
             raise ValueError(
                 "Was expecting a 1-channel (greyscale) or 3-channel (colour) image.  Found {} channels"
