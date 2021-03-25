@@ -38,17 +38,9 @@ class Segmenter(pl.LightningModule):
         parser.add_argument('--encoder_name',
                             type=str,
                             default="efficientnet-b0")
-        parser.add_argument('--batch_size', type=int, default=4)
-        parser.add_argument('--num_workers',
-                            type=int,
-                            default=os.cpu_count() // 2)
         parser.add_argument('--patience', type=int, default=10)
         parser.add_argument('--depth', type=int, default=5)
-        parser.add_argument('--data_dir',
-                            type=str,
-                            nargs='?',
-                            const=os.environ.get("DATA_DIR", None),
-                            default=os.environ.get("DATA_DIR", None))
+
         return parser
 
     def get_model(self):
@@ -90,13 +82,6 @@ class Segmenter(pl.LightningModule):
 
     def get_optimizer(self):
         return torch.optim.Adam
-
-    def all_dataloader(self):
-        return torch.utils.data.DataLoader(self.all_data,
-                                           batch_size=self.batch_size,
-                                           num_workers=self.num_workers,
-                                           shuffle=False,
-                                           drop_last=False)
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_data,

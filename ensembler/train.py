@@ -1,62 +1,31 @@
 import pytorch_lightning as pl
 import sys
 import os
-import json
 from ensembler.Model import Segmenter as model
 from ensembler.augments import get_augments
-# import ensembler.UNetEncoder
+from ensembler.callbacks import RecordTrainStatus
 
-patience = 10
-
-# class ReRandomCrop(A.RandomCrop):
-#     def apply(self, img, h_start=0, w_start=0, **params):
-#         print(h_start, w_start)
-#         return super().apply(img, h_start, w_start, **params)
+description = "Train a model."
 
 
-class RecordTrainStatus(pl.callbacks.Callback):
-    def on_validation_epoch_end(self, trainer, pl_module):
-        state = {
-            "Trainer": {
-                "state": trainer.state.value,
-                "current_epoch": trainer.current_epoch,
-                "num_gpus": trainer.num_gpus,
-                "max_epochs": trainer.max_epochs,
-                "max_steps": trainer.max_steps,
-                "min_epochs": trainer.min_epochs,
-                "min_steps": trainer.min_steps,
-            },
-            "EarlyStopping": {
-                "best_score": float(trainer.callbacks[0].best_score),
-                "patience": float(trainer.callbacks[0].patience),
-                "wait_count": float(trainer.callbacks[0].wait_count),
-                "stopped_epoch": float(trainer.callbacks[0].stopped_epoch),
-                "min_delta": float(trainer.callbacks[0].min_delta),
-            },
-            "Scheduler": trainer.lr_schedulers[0]["scheduler"].state_dict()
-        }
-        with open(os.path.join(trainer.logger.log_dir, "trainer.json"),
-                  "w") as statefile:
-            json.dump(state, statefile, indent=4)
-
-
-# class ModelSummary(pl.callbacks.Callback):
-#     def on_sanity_check_end(self, trainer, pl_module):
-#         dataloader = trainer.val_dataloaders[0]
-#         batch = next(iter(dataloader))
-#         model_summary = summary(trainer.model,
-#                                 input_size=tuple(batch[0].shape),
-#                                 verbose=0)
-#         print(model_summary)
-#         with open(os.path.join(trainer.logger.log_dir, "model.txt"),
-#                   "w") as modelfile:
-#             modelfile.write(str(model_summary))
+def add_argparse_args(parser):
+    parser.add_argument('--data_dir',
+                        type=str,
+                        nargs='?',
+                        const=os.environ.get("DATA_DIR", None),
+                        default=os.environ.get("DATA_DIR", None))
+    parser.add_argument('--num_workers', type=int, default=os.cpu_count() // 2)
+    parser.add_argument('--batch_size', type=int, default=4)
+    parser = model.add_model_specific_args(parser)
 
 
 def execute(args):
 
+    dict_args = vars(args)
+
     callbacks = [
-        pl.callbacks.EarlyStopping('val_loss', patience=2 * patience),
+        pl.callbacks.EarlyStopping('val_loss',
+                                   patience=2 * dict_args["patience"]),
         pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
         RecordTrainStatus()
     ]
@@ -69,10 +38,8 @@ def execute(args):
     trainer = pl.Trainer.from_argparse_args(args,
                                             gpus=1,
                                             callbacks=callbacks,
-                                            min_epochs=patience,
+                                            min_epochs=dict_args["patience"],
                                             deterministic=True,
                                             max_epochs=sys.maxsize)
-
-    dict_args = vars(args)
 
     trainer.fit(model(get_augments, **dict_args))

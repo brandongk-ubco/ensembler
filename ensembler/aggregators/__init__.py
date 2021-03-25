@@ -32,11 +32,10 @@ def batch_loss(y_hat,
             assert torch.all(y_batch[2, :, :, :] - y_batch[0, :, :, :] <= eps)
             assert torch.all(y_batch[3, :, :, :] - y_batch[0, :, :, :] <= eps)
         except AssertionError:
-            print(torch.sum(y_batch[0, :, :, :] - y_batch[1, :, :, :]))
-            print(torch.sum(y_batch[0, :, :, :] - y_batch[2, :, :, :]))
-            print(torch.sum(y_batch[0, :, :, :] - y_batch[3, :, :, :]))
-            import pdb
-            pdb.set_trace()
+            print("Warning: Batch masks are not equal!")
+            print(torch.max(y_batch[0, :, :, :] - y_batch[1, :, :, :]))
+            print(torch.max(y_batch[0, :, :, :] - y_batch[2, :, :, :]))
+            print(torch.max(y_batch[0, :, :, :] - y_batch[3, :, :, :]))
 
         y_hat_batch = reduction(y_hat_batch)
         y_batch = y_batch[0, :, :, :]

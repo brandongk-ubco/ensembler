@@ -1,6 +1,6 @@
 from enum import Enum
-from ensembler.train import execute as train
-from ensembler.dataset_statistics import execute as dataset_statistics
+from ensembler import train
+from ensembler import dataset_statistics
 
 
 class Tasks(Enum):
@@ -17,10 +17,26 @@ class Tasks(Enum):
     def choices(cls):
         return sorted([e.value for e in cls])
 
+    def description(task):
+        if task == "train":
+            return train.description
+        if task == "dataset-statistics":
+            return dataset_statistics.description
+
+        raise ValueError("Task {} not defined".format(task))
+
+    def add_argparse_args(task):
+        if task == "train":
+            return train.add_argparse_args
+        if task == "dataset-statistics":
+            return dataset_statistics.add_argparse_args
+
+        raise ValueError("Task {} not defined".format(task))
+
     def get(task):
         if task == "train":
-            return train
+            return train.execute
         if task == "dataset-statistics":
-            return dataset_statistics
+            return dataset_statistics.execute
 
         raise ValueError("Task {} not defined".format(task))
