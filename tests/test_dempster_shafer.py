@@ -1,4 +1,4 @@
-from ensembler.utils import ds_combination
+from ensembler.aggregators.DempsterSafer import ds_combination
 import torch
 
 
@@ -41,7 +41,7 @@ class TestDempsterShafer:
         diff = torch.abs(result - expected)
         assert torch.max(diff) <= eps
 
-    def test_ds_combination_all_different_uncertainty_in_two(self):
+    def test_ds_combination_all_different_uncertainty_in_two_1(self):
         a = torch.FloatTensor([0.3, 0.7, 0])
         b = torch.FloatTensor([0, 0.7, 0.3])
         result = ds_combination(a, b)
@@ -50,7 +50,7 @@ class TestDempsterShafer:
         diff = torch.abs(result - expected)
         assert torch.max(diff) <= eps
 
-    def test_ds_combination_all_different_uncertainty_in_two(self):
+    def test_ds_combination_all_different_uncertainty_in_two_2(self):
         a = torch.FloatTensor([0.3, 0.6, 0.1])
         b = torch.FloatTensor([0.1, 0.6, 0.3])
         result = ds_combination(a, b)

@@ -1,7 +1,6 @@
 from ensembler.utils import split_dataframe
 import pandas as pd
 import uuid
-import os
 
 
 class TestSpliteDataFrame:

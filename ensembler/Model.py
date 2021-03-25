@@ -6,81 +6,9 @@ import os
 from matplotlib import pyplot as plt
 from argparse import ArgumentParser
 from datasets import Datasets
-from utils import weighted_loss, ds_combination
 from functools import partial
-from typing import List
-
-
-def ds_reduce_column(x: int, y: int, y_hat, reduced) -> torch.Tensor:
-    for k in range(1, y_hat.shape[0]):
-        reduced[:, x, y] = ds_combination(reduced[:, x, y], y_hat[k, :, x, y])
-    return torch.empty(0)
-
-
-@torch.jit.script
-def ds_reduce(y_hat):
-    futures: List[torch.jit.Future[torch.Tensor]] = []
-    reduced = y_hat[0, :, :, :].clone()
-    expected = y_hat.shape[2] * y_hat.shape[3]
-
-    i = 0
-
-    for x in range(y_hat.shape[2]):
-        for y in range(y_hat.shape[3]):
-            if len(futures) > 100:
-                for x, future in enumerate(futures):
-                    if i % 10000 == 0:
-                        print(i / expected)
-                    i += 1
-                    torch.jit.wait(future)
-                futures.clear()
-            futures.append(
-                torch.jit.fork(ds_reduce_column, x, y, y_hat, reduced))
-
-    return reduced
-
-
-def batch_loss(y_hat,
-               y,
-               reduction=partial(torch.mean, **{"dim": [0]}),
-               loss=smp.losses.FocalLoss("multilabel")):
-
-    batches = y_hat.shape[0]
-    loss_val = 0
-    for batch in range(0, batches, 4):
-        y_hat_batch = y_hat[batch:batch + 4, :, :, :].clone()
-        y_hat_batch[1, :, :, :] = torch.flip(y_hat_batch[1, :, :, :].clone(),
-                                             [1])
-        y_hat_batch[2, :, :, :] = torch.flip(y_hat_batch[2, :, :, :].clone(),
-                                             [2])
-        y_hat_batch[3, :, :, :] = torch.flip(y_hat_batch[3, :, :, :].clone(),
-                                             [1, 2])
-        y_batch = y[batch:batch + 4, :, :, :].clone()
-        y_batch[1, :, :, :] = torch.flip(y_batch[1, :, :, :].clone(), [1])
-        y_batch[2, :, :, :] = torch.flip(y_batch[2, :, :, :].clone(), [2])
-        y_batch[3, :, :, :] = torch.flip(y_batch[3, :, :, :].clone(), [1, 2])
-
-        try:
-            eps = torch.finfo(y.dtype).eps
-            assert torch.all(y_batch[0, :, :, :] - y_batch[1, :, :, :] <= eps)
-            assert torch.all(y_batch[0, :, :, :] - y_batch[2, :, :, :] <= eps)
-            assert torch.all(y_batch[0, :, :, :] - y_batch[3, :, :, :] <= eps)
-            assert torch.all(y_batch[1, :, :, :] - y_batch[0, :, :, :] <= eps)
-            assert torch.all(y_batch[2, :, :, :] - y_batch[0, :, :, :] <= eps)
-            assert torch.all(y_batch[3, :, :, :] - y_batch[0, :, :, :] <= eps)
-        except AssertionError:
-            print(torch.sum(y_batch[0, :, :, :] - y_batch[1, :, :, :]))
-            print(torch.sum(y_batch[0, :, :, :] - y_batch[2, :, :, :]))
-            print(torch.sum(y_batch[0, :, :, :] - y_batch[3, :, :, :]))
-            import pdb
-            pdb.set_trace()
-
-        y_hat_batch = reduction(y_hat_batch)
-        y_batch = y_batch[0, :, :, :]
-
-        loss_val += loss(y_hat_batch, y_batch)
-
-    return loss_val
+from aggregators import batch_loss
+from utils import weighted_loss
 
 
 class Segmenter(pl.LightningModule):
