@@ -5,7 +5,7 @@ import torch
 
 def batch_loss(y_hat,
                y,
-               reduction=partial(torch.mean, **{"dim": [0]}),
+               reduction=partial(torch.prod, **{"dim": 0}),
                loss=smp.losses.FocalLoss("multilabel")):
 
     batches = y_hat.shape[0]

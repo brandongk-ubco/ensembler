@@ -3,7 +3,7 @@ import torch
 from skimage.color import rgb2hsv, hsv2rgb
 from skimage import exposure
 from skimage.util import dtype_limits
-
+import torchvision
 
 def contrast_stretch(image, min_percentile=2, max_percentile=98):
     p2, p98 = np.percentile(image, (min_percentile, max_percentile))
@@ -37,6 +37,10 @@ class AugmentedDataset:
                 "Was expecting a 1-channel (greyscale) or 3-channel (colour) image.  Found {} channels"
                 .format(image.shape[2]))
 
+        image -= np.min(image)
+        image /= np.max(image)
+        image = np.clip(image, 0., 1.)
+
         eps = np.finfo(mask.dtype).eps
 
         coverage = mask.sum(0).sum(0)
@@ -59,8 +63,7 @@ class AugmentedDataset:
         transformed_image = transformed_image.transpose(2, 0, 1)
         transformed_mask = transformed_mask.transpose(2, 0, 1)
 
-        return torch.from_numpy(transformed_image), torch.from_numpy(
-            transformed_mask)
+        return torch.from_numpy(transformed_image), torch.from_numpy(transformed_mask)
 
 
 class DatasetAugmenter(AugmentedDataset):

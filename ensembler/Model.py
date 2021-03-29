@@ -10,7 +10,6 @@ from ensembler.utils import weighted_loss
 from ensembler.aggregators import batch_loss
 from ensembler.datasets import Datasets
 
-
 class Segmenter(pl.LightningModule):
     def __init__(self, get_augments, **kwargs):
         super().__init__()
@@ -36,7 +35,7 @@ class Segmenter(pl.LightningModule):
     def add_model_specific_args(parser):
         parser.add_argument('--encoder_name',
                             type=str,
-                            default="efficientnet-b0")
+                            default="efficientnet-b1")
         parser.add_argument('--depth', type=int, default=5)
 
     def get_model(self):
@@ -44,8 +43,7 @@ class Segmenter(pl.LightningModule):
                          encoder_weights=None,
                          encoder_depth=self.depth,
                          in_channels=self.dataset.num_channels,
-                         classes=self.dataset.num_classes,
-                         activation='softmax2d')
+                         classes=self.dataset.num_classes)
         model.apply(self.initialize_weights)
         return model
 
