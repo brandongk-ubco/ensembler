@@ -4,6 +4,7 @@ from skimage.color import rgb2hsv, hsv2rgb
 from skimage import exposure
 from skimage.util import dtype_limits
 import torchvision
+import random
 
 
 def contrast_stretch(image, min_percentile=2, max_percentile=98):
@@ -72,12 +73,21 @@ class DatasetAugmenter(AugmentedDataset):
 
     lastItem = None
 
+    def __init__(self, dataset, transform, shuffle=False):
+        super().__init__(dataset, transform)
+        num_elements = len(self.dataset)
+        self.data_map = list(range(num_elements))
+        self.shuffle = shuffle
+
     def __getitem__(self, idx):
+        if idx == 0:
+            random.shuffle(self.data_map)
+
         dataset_idx = idx // 4
         flip_idx = idx % 4
 
         if flip_idx == 0:
-            self.lastItem = super().__getitem__(dataset_idx)
+            self.lastItem = super().__getitem__(self.data_map[dataset_idx])
 
         image, mask = self.lastItem
 

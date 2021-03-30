@@ -4,6 +4,7 @@ import os
 from ensembler.Model import Segmenter as model
 from ensembler.augments import get_augments
 from ensembler.callbacks import RecordTrainStatus
+from ensembler.datasets import Datasets
 
 description = "Train a model."
 
@@ -14,6 +15,7 @@ def add_argparse_args(parser):
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--accumulate_grad_batches', type=int, default=1)
     parser = model.add_model_specific_args(parser)
     return parser
 
@@ -34,11 +36,13 @@ def execute(args):
     except pl.utilities.exceptions.MisconfigurationException:
         pass
 
-    trainer = pl.Trainer.from_argparse_args(args,
-                                            gpus=1,
-                                            callbacks=callbacks,
-                                            min_epochs=dict_args["patience"],
-                                            deterministic=True,
-                                            max_epochs=sys.maxsize)
+    trainer = pl.Trainer.from_argparse_args(
+        args,
+        gpus=1,
+        callbacks=callbacks,
+        min_epochs=dict_args["patience"],
+        deterministic=True,
+        max_epochs=sys.maxsize,
+        accumulate_grad_batches=dict_args["accumulate_grad_batches"])
 
     trainer.fit(model(get_augments, **dict_args))

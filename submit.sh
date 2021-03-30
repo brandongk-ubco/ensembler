@@ -16,4 +16,4 @@ source ~/envs/ensembler/bin/activate
 export PYTHONFAULTHANDLER=1
 export PYTHONUNBUFFERED=1
 
-srun python -m ensembler train voc
+srun python -m ensembler voc train

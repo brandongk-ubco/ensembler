@@ -94,7 +94,7 @@ def get_dataloaders(directory, augmentations):
     all_data = SeverstalDataset(directory, split="all")
 
     train_transform, val_transform, test_transform = augmentations
-    train_data = DatasetAugmenter(train_data, train_transform)
+    train_data = DatasetAugmenter(train_data, train_transform, shuffle=True)
     val_data = DatasetAugmenter(val_data, val_transform)
     test_data = DatasetAugmenter(test_data, test_transform)
 

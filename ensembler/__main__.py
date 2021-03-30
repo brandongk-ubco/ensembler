@@ -1,14 +1,16 @@
 import ensembler.environment
-from ensembler.parameters import args
+from ensembler.parameters import parse_parameters
 from ensembler import Tasks
 import matplotlib
 import pytorch_lightning as pl
 
 matplotlib.use('Agg')
 
-dict_args = vars(args)
+parameters = parse_parameters()
 
-pl.seed_everything(dict_args["seed"])
+dict_params = vars(parameters)
 
-task = Tasks.get(dict_args["task"])
-task(args)
+pl.seed_everything(dict_params["seed"])
+
+task = Tasks.get(dict_params["task"])
+task(parameters)

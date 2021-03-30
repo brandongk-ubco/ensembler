@@ -26,8 +26,12 @@ class Segmenter(pl.LightningModule):
         self.batch_loss_multiplier = self.hparams["batch_loss_multiplier"]
         self.focal_loss_multiplier = self.hparams["focal_loss_multiplier"]
         self.dice_loss_multiplier = self.hparams["dice_loss_multiplier"]
+        self.lovasz_loss_multiplier = self.hparams["lovasz_loss_multiplier"]
+        self.weight_decay = self.hparams["weight_decay"]
+        self.learning_rate = self.hparams["learning_rate"]
+        self.min_learning_rate = self.hparams["min_learning_rate"]
+        self.l1_loss_multiplier = self.hparams["l1_loss_multiplier"]
 
-        self.loss = self.get_loss()
         self.optimizer = self.get_optimizer()
         self.batches_to_write = 2
         self.intensity = 255 // self.dataset.num_classes
@@ -45,6 +49,11 @@ class Segmenter(pl.LightningModule):
                             default=None)
         parser.add_argument('--focal_loss_multiplier', type=float, default=1.)
         parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
+        parser.add_argument('--lovasz_loss_multiplier', type=float, default=0.)
+        parser.add_argument('--weight_decay', type=float, default=1e-3)
+        parser.add_argument('--l1_loss_multiplier', type=float, default=1e-3)
+        parser.add_argument('--learning_rate', type=float, default=1e-3)
+        parser.add_argument('--min_learning_rate', type=float, default=1e-5)
 
     def get_model(self):
         model = smp.Unet(encoder_name=self.encoder_name,
@@ -67,19 +76,45 @@ class Segmenter(pl.LightningModule):
             torch.nn.init.kaiming_uniform_(m.weight.data)
             torch.nn.init.constant_(m.bias.data, 0)
 
-    def get_loss(self):
+    def loss(self, y_hat, y):
 
-        loss_function = lambda y_hat, y: self.focal_loss_multiplier * smp.losses.FocalLoss(
-            "multilabel")(y_hat, y
-                          ) + self.dice_loss_multiplier * smp.losses.DiceLoss(
-                              "multilabel")(y_hat, y)
+        focal_loss = smp.losses.FocalLoss("multilabel")(y_hat, y)
+        dice_loss = smp.losses.DiceLoss("multilabel")(y_hat, y)
+        lovasz_loss = smp.losses.LovaszLoss("multilabel")(y_hat, y)
+        l1_loss = self.sum_parameter_weights()
 
-        if self.batch_loss_multiplier is None:
-            return loss_function
+        weighted_focal_loss = self.focal_loss_multiplier * focal_loss
+        weighted_dice_loss = self.dice_loss_multiplier * dice_loss
+        weighted_lovasz_loss = self.lovasz_loss_multiplier * lovasz_loss
+        weighted_l1_loss = self.l1_loss_multiplier * l1_loss
 
-        return lambda y_hat, y: loss_function(
-            y_hat, y) + self.batch_loss_multiplier * batch_loss(
-                y_hat, y, loss=loss_function)
+        self.log_dict(
+            {
+                "focal_loss": weighted_focal_loss,
+                "dice_loss": weighted_dice_loss,
+                "lovasz_loss": weighted_lovasz_loss,
+                "l1_loss": weighted_l1_loss
+            },
+            prog_bar=True)
+
+        self.log_dict({
+            "unweighted_focal_loss": focal_loss,
+            "unweighted_dice_loss": dice_loss,
+            "unweighted_lovasz_loss": lovasz_loss,
+            "unweighted_l1_loss": l1_loss
+        })
+
+        return weighted_focal_loss + weighted_dice_loss + weighted_lovasz_loss + weighted_l1_loss
+
+    def sum_parameter_weights(self):
+        sum_val = torch.stack([
+            torch.sum(torch.abs(param)) for param in self.parameters()
+        ]).sum(dim=0)
+
+        count_val = torch.IntTensor(
+            [torch.numel(param) for param in self.parameters()]).sum(dim=0)
+
+        return sum_val / count_val
 
     def get_optimizer(self):
         return torch.optim.Adam
@@ -129,9 +164,14 @@ class Segmenter(pl.LightningModule):
         return {"val_loss", loss}
 
     def configure_optimizers(self):
-        optimizer = self.optimizer(self.parameters(), lr=1e-3)
+        optimizer = self.optimizer(self.parameters(),
+                                   lr=self.learning_rate,
+                                   weight_decay=self.weight_decay)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, patience=self.patience, min_lr=1e-5, verbose=True)
+            optimizer,
+            patience=self.patience,
+            min_lr=self.min_learning_rate,
+            verbose=True)
 
         return {
             "optimizer": optimizer,
