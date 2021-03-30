@@ -21,7 +21,7 @@ class AugmentedDataset:
         self.transform = transform
 
     def __len__(self):
-        return len(self.dataset) * 4
+        return len(self.dataset)
 
     def __getitem__(self, idx):
         image, mask = self.dataset.__getitem__(idx)
@@ -62,29 +62,35 @@ class AugmentedDataset:
             relative_coverage = transformed_coverage_percent / coverage_percent
             min_transformed_coverage = relative_coverage[1:].min()
 
-        transformed_image = transformed_image.transpose(2, 0, 1)
-        transformed_mask = transformed_mask.transpose(2, 0, 1)
-
-        return torch.from_numpy(transformed_image), torch.from_numpy(
-            transformed_mask)
+        return transformed_image, transformed_mask
 
 
 class DatasetAugmenter(AugmentedDataset):
 
     lastItem = None
 
-    def __init__(self, dataset, transform, shuffle=False):
-        super().__init__(dataset, transform)
+    def __init__(self,
+                 dataset,
+                 patch_transform,
+                 batch_size,
+                 augments=None,
+                 shuffle=False):
+        super().__init__(dataset, patch_transform)
         num_elements = len(self.dataset)
         self.data_map = list(range(num_elements))
         self.shuffle = shuffle
+        self.batch_size = batch_size
+        self.augments = augments
+
+    def __len__(self):
+        return len(self.dataset) * self.batch_size
 
     def __getitem__(self, idx):
         if idx == 0:
             random.shuffle(self.data_map)
 
-        dataset_idx = idx // 4
-        flip_idx = idx % 4
+        dataset_idx = idx // self.batch_size
+        flip_idx = idx % self.batch_size
 
         if flip_idx == 0:
             self.lastItem = super().__getitem__(self.data_map[dataset_idx])
@@ -93,17 +99,28 @@ class DatasetAugmenter(AugmentedDataset):
 
         if flip_idx == 0:
             pass
+        elif flip_idx == 1:
+            image = np.flip(image, [0])
+            mask = np.flip(mask, [0])
+        elif flip_idx == 2:
+            image = np.flip(image, [1])
+            mask = np.flip(mask, [1])
+        elif flip_idx == 3:
+            image = np.flip(image, [0, 1])
+            mask = np.flip(mask, [0, 1])
+        elif self.augments is not None:
+            image = self.augments(image=image)["image"]
+        else:
+            raise ValueError(
+                "Batch Size too large, must supply augments to generate additional samples"
+            )
 
-        if flip_idx == 1:
-            image = torch.flip(image, [1])
-            mask = torch.flip(mask, [1])
+        image -= np.min(image)
+        image /= np.max(image)
+        image = np.clip(image, 0., 1.)
+        image = image - np.mean(image)
 
-        if flip_idx == 2:
-            image = torch.flip(image, [2])
-            mask = torch.flip(mask, [2])
+        image = image.transpose(2, 0, 1)
+        mask = mask.transpose(2, 0, 1)
 
-        if flip_idx == 3:
-            image = torch.flip(image, [1, 2])
-            mask = torch.flip(mask, [1, 2])
-
-        return image, mask
+        return torch.from_numpy(image.copy()), torch.from_numpy(mask.copy())

@@ -133,7 +133,7 @@ def process_split(sample_split, statistics_file):
     return train_images, val_images, test_images
 
 
-def get_dataloaders(voc_folder, augmentations):
+def get_dataloaders(voc_folder, batch_size, augmentations):
 
     with open(os.path.join(voc_folder, "split.json"), "r") as splitjson:
         sample_split = json.load(splitjson)
@@ -159,9 +159,21 @@ def get_dataloaders(voc_folder, augmentations):
                            test_images,
                            split="test")
 
-    train_transform, val_transform, test_transform = augmentations
-    train_data = DatasetAugmenter(train_data, train_transform, shuffle=True)
-    val_data = DatasetAugmenter(val_data, val_transform)
-    test_data = DatasetAugmenter(test_data, test_transform)
+    train_transform, patch_transform, test_transform = augmentations
+
+    train_data = DatasetAugmenter(train_data,
+                                  patch_transform,
+                                  augments=train_transform,
+                                  batch_size=batch_size,
+                                  shuffle=True)
+    val_data = DatasetAugmenter(val_data,
+                                patch_transform,
+                                augments=train_transform,
+                                batch_size=batch_size)
+    test_data = DatasetAugmenter(
+        test_data,
+        test_transform,
+        batch_size=min(4, batch_size),
+    )
 
     return train_data, val_data, test_data

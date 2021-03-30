@@ -8,8 +8,8 @@ import pandas as pd
 from ensembler.datasets.helpers import split_dataset, sample_dataset
 import json
 
-image_height = 768
-image_width = 1024
+image_height = 512
+image_width = 512
 num_classes = 4
 loss_weights = [0.5, 1, 10, 1]
 classes = {"background": 0, "gripper": 50, "wrinkle": 100, "fabric": 200}
@@ -99,15 +99,26 @@ def get_all_dataloader(directory):
     return WrinklerDataset(directory, split="all")
 
 
-def get_dataloaders(directory, augmentations):
-    train_transform, val_transform, test_transform = augmentations
+def get_dataloaders(directory, batch_size, augmentations):
+    train_transform, patch_transform, test_transform = augmentations
 
     train_data = WrinklerDataset(directory, split="train")
     val_data = WrinklerDataset(directory, split="val")
     test_data = WrinklerDataset(directory, split="test")
 
-    train_data = DatasetAugmenter(train_data, train_transform, shuffle=True)
-    val_data = DatasetAugmenter(val_data, val_transform)
-    test_data = DatasetAugmenter(test_data, test_transform)
+    train_data = DatasetAugmenter(train_data,
+                                  patch_transform,
+                                  augments=train_transform,
+                                  batch_size=batch_size,
+                                  shuffle=True)
+    val_data = DatasetAugmenter(val_data,
+                                patch_transform,
+                                augments=train_transform,
+                                batch_size=batch_size)
+    test_data = DatasetAugmenter(
+        test_data,
+        test_transform,
+        batch_size=min(4, batch_size),
+    )
 
     return train_data, val_data, test_data

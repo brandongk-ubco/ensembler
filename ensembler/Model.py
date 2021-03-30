@@ -16,9 +16,6 @@ class Segmenter(pl.LightningModule):
         self.hparams = kwargs
         self.patience = self.hparams["patience"]
         self.dataset = Datasets.get(self.hparams["dataset"])
-        self.train_data, self.val_data, self.test_data = self.dataset.get_dataloaders(
-            os.path.join(self.hparams["data_dir"], self.hparams["dataset"]),
-            get_augments(self.dataset.image_height, self.dataset.image_width))
         self.encoder_name = self.hparams["encoder_name"]
         self.num_workers = self.hparams["num_workers"]
         self.depth = self.hparams["depth"]
@@ -31,6 +28,11 @@ class Segmenter(pl.LightningModule):
         self.learning_rate = self.hparams["learning_rate"]
         self.min_learning_rate = self.hparams["min_learning_rate"]
         self.l1_loss_multiplier = self.hparams["l1_loss_multiplier"]
+
+        self.train_data, self.val_data, self.test_data = self.dataset.get_dataloaders(
+            os.path.join(self.hparams["data_dir"], self.hparams["dataset"]),
+            self.batch_size,
+            get_augments(self.dataset.image_height, self.dataset.image_width))
 
         self.optimizer = self.get_optimizer()
         self.batches_to_write = 2
@@ -135,7 +137,7 @@ class Segmenter(pl.LightningModule):
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.test_data,
-                                           batch_size=self.batch_size,
+                                           batch_size=min(4, self.batch_size),
                                            num_workers=self.num_workers,
                                            shuffle=False,
                                            drop_last=False)
@@ -210,23 +212,27 @@ class Segmenter(pl.LightningModule):
         except AttributeError:
             return
 
+        x[1, :, :, :] = np.flip(x[1, :, :, :], [1])
+        x[2, :, :, :] = np.flip(x[2, :, :, :], [2])
+        x[3, :, :, :] = np.flip(x[3, :, :, :], [1, 2])
+
         y_hat[1, :, :, :] = np.flip(y_hat[1, :, :, :], [1])
         y_hat[2, :, :, :] = np.flip(y_hat[2, :, :, :], [2])
         y_hat[3, :, :, :] = np.flip(y_hat[3, :, :, :], [1, 2])
 
-        img = x[0, :, :, :]
         mask = y[0, :, :, :]
-
-        img = img.transpose(1, 2, 0)
         mask = mask.transpose(1, 2, 0)
 
         mask_img = np.argmax(mask, axis=2) * self.intensity
 
         for i in range(y_hat.shape[0]):
+
+            img = x[i, :, :, :]
+            img = img - np.min(img)
+            img = img.transpose(1, 2, 0)
+
             predicted_mask = y_hat[i, :, :, :]
-
             predicted_mask = predicted_mask.transpose(1, 2, 0)
-
             predicted_mask_img = np.argmax(predicted_mask,
                                            axis=2) * self.intensity
 
@@ -234,6 +240,10 @@ class Segmenter(pl.LightningModule):
                                    "{}_{}.png".format(batch_idx, i))
 
             self.save_prediction(img, mask_img, predicted_mask_img, outfile)
+
+        img = x[0, :, :, :]
+        img = img - np.min(img)
+        img = img.transpose(1, 2, 0)
 
         predicted_mask = 1 - np.prod(1 - y_hat, axis=0)
         predicted_mask = predicted_mask.transpose(1, 2, 0)
