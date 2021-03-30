@@ -14,7 +14,6 @@ def get_augments(image_height, image_width):
         A.OneOf([
             A.CoarseDropout(),
             A.GaussNoise(),
-            A.GridDropout(),
             A.ISONoise(),
             A.MultiplicativeNoise(),
             A.RandomBrightness(),
