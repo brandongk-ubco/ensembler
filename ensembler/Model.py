@@ -4,11 +4,11 @@ import torch
 import numpy as np
 import os
 from matplotlib import pyplot as plt
-from argparse import ArgumentParser
 from functools import partial
 from ensembler.utils import weighted_loss
 from ensembler.aggregators import batch_loss
 from ensembler.datasets import Datasets
+
 
 class Segmenter(pl.LightningModule):
     def __init__(self, get_augments, **kwargs):
@@ -23,6 +23,9 @@ class Segmenter(pl.LightningModule):
         self.num_workers = self.hparams["num_workers"]
         self.depth = self.hparams["depth"]
         self.batch_size = self.hparams["batch_size"]
+        self.batch_loss_multiplier = self.hparams["batch_loss_multiplier"]
+        self.focal_loss_multiplier = self.hparams["focal_loss_multiplier"]
+        self.dice_loss_multiplier = self.hparams["dice_loss_multiplier"]
 
         self.loss = self.get_loss()
         self.optimizer = self.get_optimizer()
@@ -35,8 +38,13 @@ class Segmenter(pl.LightningModule):
     def add_model_specific_args(parser):
         parser.add_argument('--encoder_name',
                             type=str,
-                            default="efficientnet-b1")
+                            default="efficientnet-b0")
         parser.add_argument('--depth', type=int, default=5)
+        parser.add_argument('--batch_loss_multiplier',
+                            type=float,
+                            default=None)
+        parser.add_argument('--focal_loss_multiplier', type=float, default=1.)
+        parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
 
     def get_model(self):
         model = smp.Unet(encoder_name=self.encoder_name,
@@ -60,19 +68,18 @@ class Segmenter(pl.LightningModule):
             torch.nn.init.constant_(m.bias.data, 0)
 
     def get_loss(self):
-        focal_kwargs = {
-            "weights": self.dataset.loss_weights,
-            "loss_function": smp.losses.FocalLoss("binary", reduction=None)
-        }
-        focal_loss = partial(weighted_loss, **focal_kwargs)
 
-        # minimize_diversity_kwargs = {
-        #     "reduction": partial(torch.std, **{"dim": [0]}),
-        #     "loss": lambda y_hat, y: torch.mean(y_hat)
-        # }
-        # minimize_diversity = partial(batch_loss, **minimize_diversity_kwargs)
+        loss_function = lambda y_hat, y: self.focal_loss_multiplier * smp.losses.FocalLoss(
+            "multilabel")(y_hat, y
+                          ) + self.dice_loss_multiplier * smp.losses.DiceLoss(
+                              "multilabel")(y_hat, y)
 
-        return lambda y_hat, y: focal_loss(y_hat, y) + batch_loss(y_hat, y)
+        if self.batch_loss_multiplier is None:
+            return loss_function
+
+        return lambda y_hat, y: loss_function(
+            y_hat, y) + self.batch_loss_multiplier * batch_loss(
+                y_hat, y, loss=loss_function)
 
     def get_optimizer(self):
         return torch.optim.Adam
@@ -132,6 +139,27 @@ class Segmenter(pl.LightningModule):
             "monitor": 'val_loss'
         }
 
+    def save_prediction(self, img, mask_img, predicted_mask_img, outfile):
+
+        fig, axs = plt.subplots(3, 1)
+
+        if img.shape[2] == 1:
+            axs[0].imshow(img.squeeze(), cmap="gray")
+        else:
+            axs[0].imshow(img, cmap="gray")
+
+        axs[1].imshow(mask_img, cmap="gray", vmin=0, vmax=255)
+        axs[2].imshow(predicted_mask_img, cmap="gray", vmin=0, vmax=255)
+
+        for ax_i in axs:
+            ax_i.axis('off')
+
+        if os.path.exists(outfile):
+            os.remove(outfile)
+
+        plt.savefig(outfile)
+        plt.close()
+
     def write_predictions(self, x, y, y_hat, batch_idx):
 
         if batch_idx >= self.batches_to_write:
@@ -142,38 +170,35 @@ class Segmenter(pl.LightningModule):
         except AttributeError:
             return
 
+        y_hat[1, :, :, :] = np.flip(y_hat[1, :, :, :], [1])
+        y_hat[2, :, :, :] = np.flip(y_hat[2, :, :, :], [2])
+        y_hat[3, :, :, :] = np.flip(y_hat[3, :, :, :], [1, 2])
+
+        img = x[0, :, :, :]
+        mask = y[0, :, :, :]
+
+        img = img.transpose(1, 2, 0)
+        mask = mask.transpose(1, 2, 0)
+
+        mask_img = np.argmax(mask, axis=2) * self.intensity
+
         for i in range(y_hat.shape[0]):
-            img = x[i, :, :, :]
-            mask = y[i, :, :, :]
             predicted_mask = y_hat[i, :, :, :]
 
-            img = img.transpose(1, 2, 0)
-            mask = mask.transpose(1, 2, 0)
             predicted_mask = predicted_mask.transpose(1, 2, 0)
-
-            mask_img = np.argmax(mask, axis=2) * self.intensity
 
             predicted_mask_img = np.argmax(predicted_mask,
                                            axis=2) * self.intensity
 
-            fig, axs = plt.subplots(3, 1)
-
-            if img.shape[2] == 1:
-                axs[0].imshow(img.squeeze(), cmap="gray")
-            else:
-                axs[0].imshow(img, cmap="gray")
-
-            axs[1].imshow(mask_img, cmap="gray", vmin=0, vmax=255)
-            axs[2].imshow(predicted_mask_img, cmap="gray", vmin=0, vmax=255)
-
-            for ax_i in axs:
-                ax_i.axis('off')
-
             outfile = os.path.join(self.logger.log_dir,
                                    "{}_{}.png".format(batch_idx, i))
 
-            if os.path.exists(outfile):
-                os.remove(outfile)
+            self.save_prediction(img, mask_img, predicted_mask_img, outfile)
 
-            plt.savefig(outfile)
-            plt.close()
+        predicted_mask = 1 - np.prod(1 - y_hat, axis=0)
+        predicted_mask = predicted_mask.transpose(1, 2, 0)
+        predicted_mask_img = np.argmax(predicted_mask, axis=2) * self.intensity
+
+        outfile = os.path.join(self.logger.log_dir, "{}.png".format(batch_idx))
+
+        self.save_prediction(img, mask_img, predicted_mask_img, outfile)

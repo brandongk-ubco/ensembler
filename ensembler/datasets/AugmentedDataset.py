@@ -5,6 +5,7 @@ from skimage import exposure
 from skimage.util import dtype_limits
 import torchvision
 
+
 def contrast_stretch(image, min_percentile=2, max_percentile=98):
     p2, p98 = np.percentile(image, (min_percentile, max_percentile))
     image = exposure.rescale_intensity(image, in_range=(p2, p98))
@@ -63,7 +64,8 @@ class AugmentedDataset:
         transformed_image = transformed_image.transpose(2, 0, 1)
         transformed_mask = transformed_mask.transpose(2, 0, 1)
 
-        return torch.from_numpy(transformed_image), torch.from_numpy(transformed_mask)
+        return torch.from_numpy(transformed_image), torch.from_numpy(
+            transformed_mask)
 
 
 class DatasetAugmenter(AugmentedDataset):

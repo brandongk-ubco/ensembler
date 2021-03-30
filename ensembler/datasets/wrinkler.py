@@ -95,16 +95,19 @@ class WrinklerDataset(Dataset):
         return (image, mask)
 
 
+def get_all_dataloader(directory):
+    return WrinklerDataset(directory, split="all")
+
+
 def get_dataloaders(directory, augmentations):
     train_transform, val_transform, test_transform = augmentations
 
     train_data = WrinklerDataset(directory, split="train")
     val_data = WrinklerDataset(directory, split="val")
     test_data = WrinklerDataset(directory, split="test")
-    all_data = WrinklerDataset(directory, split="all")
 
     train_data = DatasetAugmenter(train_data, train_transform)
     val_data = DatasetAugmenter(val_data, val_transform)
     test_data = DatasetAugmenter(test_data, test_transform)
 
-    return train_data, val_data, test_data, all_data
+    return train_data, val_data, test_data

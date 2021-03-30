@@ -1,11 +1,10 @@
-from functools import partial
 import segmentation_models_pytorch as smp
 import torch
 
 
 def batch_loss(y_hat,
                y,
-               reduction=partial(torch.prod, **{"dim": 0}),
+               reduction=lambda y_hat: 1 - torch.prod(1 - y_hat, dim=0),
                loss=smp.losses.FocalLoss("multilabel")):
 
     batches = y_hat.shape[0]
