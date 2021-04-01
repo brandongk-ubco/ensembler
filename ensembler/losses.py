@@ -4,16 +4,16 @@ from typing import Optional
 from functools import partial
 import torch.nn.functional as F
 
-def focal_loss(
-    output: torch.Tensor,
-    target: torch.Tensor,
-    gamma: float = 2.0,
-    alpha: Optional[float] = 0.25,
-    reduction: str = "mean",
-    normalized: bool = False,
-    reduced_threshold: Optional[float] = None,
-    eps: float = 1e-6,
-) -> torch.Tensor:
+
+def focal_loss(output: torch.Tensor,
+               target: torch.Tensor,
+               gamma: float = 2.0,
+               alpha: Optional[float] = 0.25,
+               reduction: str = "mean",
+               normalized: bool = False,
+               reduced_threshold: Optional[float] = None,
+               eps: float = 1e-6,
+               weights=None) -> torch.Tensor:
     """Compute binary focal loss between target and output logits.
     See :class:`~pytorch_toolbelt.losses.FocalLoss` for details.
     Args:
@@ -51,6 +51,10 @@ def focal_loss(
     if alpha is not None:
         loss *= alpha * target + (1 - alpha) * (1 - target)
 
+    if weights is not None:
+        import pdb
+        pdb.set_trace()
+
     if normalized:
         norm_factor = focal_term.sum().clamp_min(eps)
         loss /= norm_factor
@@ -64,18 +68,20 @@ def focal_loss(
 
     return loss
 
+
 class FocalLoss(smp.losses.FocalLoss):
     def __init__(
         self,
         mode: str,
         alpha: Optional[float] = None,
         gamma: Optional[float] = 2.,
-        ignore_index: Optional[int] = None, 
+        ignore_index: Optional[int] = None,
         reduction: Optional[str] = "mean",
         normalized: bool = False,
         reduced_threshold: Optional[float] = None,
     ):
-        super().__init__(mode, alpha, gamma, ignore_index, reduction, normalized, reduced_threshold)
+        super().__init__(mode, alpha, gamma, ignore_index, reduction,
+                         normalized, reduced_threshold)
 
         self.focal_loss_fn = partial(
             focal_loss,

@@ -9,7 +9,7 @@ from ensembler.datasets.helpers import split_dataset, sample_dataset
 import json
 
 image_height = 768
-image_width = 768
+image_width = 1024
 num_classes = 4
 loss_weights = [1, 1, 2, 1]
 classes = {"background": 0, "gripper": 50, "wrinkle": 100, "fabric": 200}

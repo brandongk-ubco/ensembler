@@ -10,7 +10,9 @@ def contrast_stretch(image, min_percentile=2, max_percentile=98):
     p2, p98 = np.percentile(image, (min_percentile, max_percentile))
     image = exposure.rescale_intensity(image, in_range=(p2, p98))
     min_val, max_val = dtype_limits(image, clip_negative=True)
-    image = np.clip(image, min_val, max_val)
+    image -= np.min(image)
+    image /= np.max(image)
+    image = np.clip(image, 0., 1.)
     return image
 
 
@@ -38,10 +40,6 @@ class AugmentedDataset:
                 "Was expecting a 1-channel (greyscale) or 3-channel (colour) image.  Found {} channels"
                 .format(image.shape[2]))
 
-        image -= np.min(image)
-        image /= np.max(image)
-        image = np.clip(image, 0., 1.)
-
         eps = np.finfo(mask.dtype).eps
 
         coverage = mask.sum(0).sum(0)
@@ -52,9 +50,7 @@ class AugmentedDataset:
         transformed_mask = mask
 
         if self.transform is not None:
-            min_transformed_coverage = 0.
-
-            while min_transformed_coverage < 0.5:
+            while True:
                 transformed = self.transform(image=image, mask=mask)
                 transformed_image = transformed["image"]
                 transformed_mask = transformed["mask"]
@@ -62,9 +58,12 @@ class AugmentedDataset:
                 transformed_coverage_percent = transformed_coverage / transformed_coverage.sum(
                 )
                 transformed_coverage_percent = np.clip(
-                    transformed_coverage_percent, a_min=eps, a_max=None)
+                    transformed_coverage_percent, a_min=0, a_max=None)
                 relative_coverage = transformed_coverage_percent / coverage_percent
                 min_transformed_coverage = relative_coverage[1:].min()
+
+                if min_transformed_coverage > 0.3:
+                    break
 
         return transformed_image, transformed_mask
 
@@ -138,6 +137,8 @@ class DatasetAugmenter(AugmentedDataset):
                  shuffle=False,
                  **kwargs):
         super().__init__(dataset, patch_transform)
+        num_elements = len(self.dataset)
+        self.data_map = list(range(num_elements))
         self.shuffle = shuffle
         self.augments = augments
 
@@ -146,7 +147,7 @@ class DatasetAugmenter(AugmentedDataset):
         if idx == 0 and self.shuffle:
             random.shuffle(self.data_map)
 
-        image, mask = super().__getitem__(idx)
+        image, mask = super().__getitem__(self.data_map[idx])
 
         if self.augments is not None:
             image = self.augments(image=image)["image"]
