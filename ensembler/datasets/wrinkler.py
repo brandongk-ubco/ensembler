@@ -11,7 +11,7 @@ import json
 image_height = 768
 image_width = 768
 num_classes = 4
-loss_weights = [0.5, 1, 10, 1]
+loss_weights = [1, 1, 2, 1]
 classes = {"background": 0, "gripper": 50, "wrinkle": 100, "fabric": 200}
 num_channels = 3
 

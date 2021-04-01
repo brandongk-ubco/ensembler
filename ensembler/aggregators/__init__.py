@@ -9,7 +9,7 @@ def batch_loss(y_hat,
 
     batches = y_hat.shape[0]
     loss_val = 0
-    for batch in range(0, batches, 4):
+    for batch in range(0, batches, 4): #Should be batch size
         y_hat_batch = y_hat[batch:batch + 4, :, :, :].clone()
         y_hat_batch[1, :, :, :] = torch.flip(y_hat_batch[1, :, :, :].clone(),
                                              [1])

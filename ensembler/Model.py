@@ -8,7 +8,7 @@ from functools import partial
 from ensembler.utils import weighted_loss
 from ensembler.aggregators import batch_loss
 from ensembler.datasets import Datasets
-
+from ensembler.losses import FocalLoss
 
 class Segmenter(pl.LightningModule):
     def __init__(self, get_augments, **kwargs):
@@ -23,7 +23,6 @@ class Segmenter(pl.LightningModule):
         self.batch_loss_multiplier = self.hparams["batch_loss_multiplier"]
         self.focal_loss_multiplier = self.hparams["focal_loss_multiplier"]
         self.dice_loss_multiplier = self.hparams["dice_loss_multiplier"]
-        self.lovasz_loss_multiplier = self.hparams["lovasz_loss_multiplier"]
         self.weight_decay = self.hparams["weight_decay"]
         self.learning_rate = self.hparams["learning_rate"]
         self.min_learning_rate = self.hparams["min_learning_rate"]
@@ -50,8 +49,7 @@ class Segmenter(pl.LightningModule):
                             type=float,
                             default=None)
         parser.add_argument('--focal_loss_multiplier', type=float, default=1.)
-        parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
-        parser.add_argument('--lovasz_loss_multiplier', type=float, default=0.)
+        parser.add_argument('--dice_loss_multiplier', type=float, default=1.)
         parser.add_argument('--weight_decay', type=float, default=1e-3)
         parser.add_argument('--l1_loss_multiplier', type=float, default=1e-3)
         parser.add_argument('--learning_rate', type=float, default=1e-3)
@@ -62,7 +60,8 @@ class Segmenter(pl.LightningModule):
                          encoder_weights=None,
                          encoder_depth=self.depth,
                          in_channels=self.dataset.num_channels,
-                         classes=self.dataset.num_classes)
+                         classes=self.dataset.num_classes,
+                         activation='softmax2d')
         model.apply(self.initialize_weights)
         return model
 
@@ -78,35 +77,64 @@ class Segmenter(pl.LightningModule):
             torch.nn.init.kaiming_uniform_(m.weight.data)
             torch.nn.init.constant_(m.bias.data, 0)
 
-    def loss(self, y_hat, y):
-
-        focal_loss = smp.losses.FocalLoss("multilabel")(y_hat, y)
-        dice_loss = smp.losses.DiceLoss("multilabel")(y_hat, y)
-        lovasz_loss = smp.losses.LovaszLoss("multilabel")(y_hat, y)
+    def sample_loss(self, y_hat, y):
+        focal_loss = FocalLoss("binary")(y_hat, y)
+        dice_loss = smp.losses.DiceLoss("binary", log_loss=True, from_logits=False)(y_hat, y)
         l1_loss = self.sum_parameter_weights()
 
         weighted_focal_loss = self.focal_loss_multiplier * focal_loss
         weighted_dice_loss = self.dice_loss_multiplier * dice_loss
-        weighted_lovasz_loss = self.lovasz_loss_multiplier * lovasz_loss
         weighted_l1_loss = self.l1_loss_multiplier * l1_loss
 
-        self.log_dict(
-            {
+        weighted_loss =  {
                 "focal_loss": weighted_focal_loss,
                 "dice_loss": weighted_dice_loss,
-                "lovasz_loss": weighted_lovasz_loss,
                 "l1_loss": weighted_l1_loss
-            },
-            prog_bar=True)
+            }
 
-        self.log_dict({
-            "unweighted_focal_loss": focal_loss,
-            "unweighted_dice_loss": dice_loss,
-            "unweighted_lovasz_loss": lovasz_loss,
-            "unweighted_l1_loss": l1_loss
-        })
+        unweighted_loss = {
+            "focal_loss": focal_loss,
+            "dice_loss": dice_loss,
+            "l1_loss": l1_loss
+        }
 
-        return weighted_focal_loss + weighted_dice_loss + weighted_lovasz_loss + weighted_l1_loss
+        return weighted_loss, unweighted_loss
+
+    def loss(self, y_hat, y):
+
+        loss_names = [
+            "focal_loss", "dice_loss", "l1_loss"
+        ]
+
+        aggregated_weighted_loss = [
+            [],
+            [],
+            []
+        ]
+        weights = self.dataset.loss_weights
+
+        assert len(weights) == y_hat.shape[1]
+        for i, w in enumerate(weights):
+            i_y = y[:, i, :, :].unsqueeze(1)
+            i_y_hat = y_hat[:, i, :, :].unsqueeze(1)
+            weighted_loss, unweighted_loss = self.sample_loss(i_y_hat.clone(), i_y.clone())
+
+            for i, (k, v) in enumerate(weighted_loss.items()):
+                class_name = list(self.dataset.classes.keys())[i]
+                self.log("class_{}_weighted_{}".format(class_name, k), v)
+                aggregated_weighted_loss[i].append(v * w)
+
+            for k, v in unweighted_loss.items():
+                class_name = list(self.dataset.classes.keys())[i]
+                self.log("class_{}_unweighted_{}".format(class_name, k), v)
+
+        for i, items in enumerate(aggregated_weighted_loss):
+            aggregated_weighted_loss[i] = torch.stack(aggregated_weighted_loss[i]).mean()
+            self.log(loss_names[i], aggregated_weighted_loss[i], prog_bar=True)
+
+        loss = torch.stack(aggregated_weighted_loss).sum()
+
+        return loss
 
     def sum_parameter_weights(self):
         sum_val = torch.stack([
