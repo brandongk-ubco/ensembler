@@ -138,7 +138,7 @@ class Segmenter(pl.LightningModule):
                                            batch_size=self.batch_size,
                                            num_workers=self.num_workers,
                                            shuffle=False,
-                                           drop_last=False)
+                                           drop_last=True)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_data,
