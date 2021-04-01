@@ -26,8 +26,11 @@ def get_augments(image_height, image_width):
     test_transform = A.Compose([
         A.PadIfNeeded(min_height=None,
                       min_width=None,
-                      pad_height_divisor=512,
-                      pad_width_divisor=512,
+                      pad_height_divisor=256,
+                      pad_width_divisor=256,
+                      border_mode=0,
+                      value=0.,
+                      mask_value=0.,
                       always_apply=True)
     ])
 

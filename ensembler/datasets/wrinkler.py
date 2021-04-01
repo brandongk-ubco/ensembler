@@ -99,26 +99,21 @@ def get_all_dataloader(directory):
     return WrinklerDataset(directory, split="all")
 
 
-def get_dataloaders(directory, batch_size, augmentations):
-    train_transform, patch_transform, test_transform = augmentations
+def get_dataloaders(directory, augmenters, batch_size, augmentations):
 
     train_data = WrinklerDataset(directory, split="train")
     val_data = WrinklerDataset(directory, split="val")
     test_data = WrinklerDataset(directory, split="test")
 
-    train_data = DatasetAugmenter(train_data,
-                                  patch_transform,
-                                  augments=train_transform,
-                                  batch_size=batch_size,
-                                  shuffle=True)
-    val_data = DatasetAugmenter(val_data,
-                                patch_transform,
-                                augments=train_transform,
-                                batch_size=batch_size)
-    test_data = DatasetAugmenter(
-        test_data,
-        test_transform,
-        batch_size=min(4, batch_size),
-    )
+    train_transform, patch_transform, test_transform = augmentations
+    train_augmenter, val_augmenter = augmenters
+
+    train_data = train_augmenter(train_data,
+                                 patch_transform,
+                                 augments=train_transform,
+                                 batch_size=batch_size,
+                                 shuffle=True)
+    val_data = val_augmenter(val_data, test_transform)
+    test_data = val_augmenter(test_data, test_transform)
 
     return train_data, val_data, test_data

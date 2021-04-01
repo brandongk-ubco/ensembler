@@ -7,7 +7,9 @@ import os
 def parse_parameters():
 
     parser = ArgumentParser()
-    parser.add_argument(dest="dataset", type=str, choices=Datasets.choices())
+    parser.add_argument(dest="dataset_name",
+                        type=str,
+                        choices=Datasets.choices())
     parser.add_argument('--data_dir',
                         type=str,
                         nargs='?',

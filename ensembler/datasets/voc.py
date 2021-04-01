@@ -6,7 +6,6 @@ from PIL import Image
 import os
 import json
 import pandas as pd
-from ensembler.datasets.AugmentedDataset import DatasetAugmenter
 from ensembler.datasets.helpers import split_dataset, sample_dataset
 import random
 from torchvision import transforms
@@ -133,7 +132,7 @@ def process_split(sample_split, statistics_file):
     return train_images, val_images, test_images
 
 
-def get_dataloaders(voc_folder, batch_size, augmentations):
+def get_dataloaders(voc_folder, augmenters, batch_size, augmentations):
 
     with open(os.path.join(voc_folder, "split.json"), "r") as splitjson:
         sample_split = json.load(splitjson)
@@ -160,20 +159,14 @@ def get_dataloaders(voc_folder, batch_size, augmentations):
                            split="test")
 
     train_transform, patch_transform, test_transform = augmentations
+    train_augmenter, val_augmenter = augmenters
 
-    train_data = DatasetAugmenter(train_data,
-                                  patch_transform,
-                                  augments=train_transform,
-                                  batch_size=batch_size,
-                                  shuffle=True)
-    val_data = DatasetAugmenter(val_data,
-                                patch_transform,
-                                augments=train_transform,
-                                batch_size=batch_size)
-    test_data = DatasetAugmenter(
-        test_data,
-        test_transform,
-        batch_size=min(4, batch_size),
-    )
+    train_data = train_augmenter(train_data,
+                                 patch_transform,
+                                 augments=train_transform,
+                                 batch_size=batch_size,
+                                 shuffle=True)
+    val_data = val_augmenter(val_data, test_transform)
+    test_data = val_augmenter(test_data, test_transform)
 
     return train_data, val_data, test_data

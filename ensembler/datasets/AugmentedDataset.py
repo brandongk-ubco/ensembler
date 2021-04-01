@@ -3,7 +3,6 @@ import torch
 from skimage.color import rgb2hsv, hsv2rgb
 from skimage import exposure
 from skimage.util import dtype_limits
-import torchvision
 import random
 
 
@@ -48,24 +47,29 @@ class AugmentedDataset:
         coverage = mask.sum(0).sum(0)
         coverage_percent = coverage / coverage.sum()
         coverage_percent = np.clip(coverage_percent, a_min=eps, a_max=1.)
-        min_transformed_coverage = 0.
 
-        while min_transformed_coverage < 0.5:
-            transformed = self.transform(image=image, mask=mask)
-            transformed_image = transformed["image"]
-            transformed_mask = transformed["mask"]
-            transformed_coverage = transformed_mask.sum(0).sum(0)
-            transformed_coverage_percent = transformed_coverage / transformed_coverage.sum(
-            )
-            transformed_coverage_percent = np.clip(
-                transformed_coverage_percent, a_min=eps, a_max=None)
-            relative_coverage = transformed_coverage_percent / coverage_percent
-            min_transformed_coverage = relative_coverage[1:].min()
+        transformed_image = image
+        transformed_mask = mask
+
+        if self.transform is not None:
+            min_transformed_coverage = 0.
+
+            while min_transformed_coverage < 0.5:
+                transformed = self.transform(image=image, mask=mask)
+                transformed_image = transformed["image"]
+                transformed_mask = transformed["mask"]
+                transformed_coverage = transformed_mask.sum(0).sum(0)
+                transformed_coverage_percent = transformed_coverage / transformed_coverage.sum(
+                )
+                transformed_coverage_percent = np.clip(
+                    transformed_coverage_percent, a_min=eps, a_max=None)
+                relative_coverage = transformed_coverage_percent / coverage_percent
+                min_transformed_coverage = relative_coverage[1:].min()
 
         return transformed_image, transformed_mask
 
 
-class DatasetAugmenter(AugmentedDataset):
+class BatchDatasetAugmenter(AugmentedDataset):
 
     lastItem = None
 
@@ -86,7 +90,7 @@ class DatasetAugmenter(AugmentedDataset):
         return len(self.dataset) * self.batch_size
 
     def __getitem__(self, idx):
-        if idx == 0:
+        if idx == 0 and self.shuffle:
             random.shuffle(self.data_map)
 
         dataset_idx = idx // self.batch_size
@@ -124,3 +128,35 @@ class DatasetAugmenter(AugmentedDataset):
         mask = mask.transpose(2, 0, 1)
 
         return torch.from_numpy(image.copy()), torch.from_numpy(mask.copy())
+
+
+class DatasetAugmenter(AugmentedDataset):
+    def __init__(self,
+                 dataset,
+                 patch_transform,
+                 augments=None,
+                 shuffle=False,
+                 **kwargs):
+        super().__init__(dataset, patch_transform)
+        self.shuffle = shuffle
+        self.augments = augments
+
+    def __getitem__(self, idx):
+
+        if idx == 0 and self.shuffle:
+            random.shuffle(self.data_map)
+
+        image, mask = super().__getitem__(idx)
+
+        if self.augments is not None:
+            image = self.augments(image=image)["image"]
+
+        image -= np.min(image)
+        image /= np.max(image)
+        image = np.clip(image, 0., 1.)
+        image = image - np.mean(image)
+
+        image = image.transpose(2, 0, 1)
+        mask = mask.transpose(2, 0, 1)
+
+        return torch.from_numpy(image), torch.from_numpy(mask)

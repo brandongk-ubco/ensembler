@@ -4,18 +4,17 @@ import torch
 import numpy as np
 import os
 from matplotlib import pyplot as plt
-from functools import partial
-from ensembler.utils import weighted_loss
-from ensembler.aggregators import batch_loss
-from ensembler.datasets import Datasets
+# from functools import partial
+# from ensembler.utils import weighted_loss
+# from ensembler.aggregators import batch_loss
 from ensembler.losses import FocalLoss
 
+
 class Segmenter(pl.LightningModule):
-    def __init__(self, get_augments, **kwargs):
+    def __init__(self, dataset, train_data, val_data, test_data, **kwargs):
         super().__init__()
         self.hparams = kwargs
         self.patience = self.hparams["patience"]
-        self.dataset = Datasets.get(self.hparams["dataset"])
         self.encoder_name = self.hparams["encoder_name"]
         self.num_workers = self.hparams["num_workers"]
         self.depth = self.hparams["depth"]
@@ -27,11 +26,10 @@ class Segmenter(pl.LightningModule):
         self.learning_rate = self.hparams["learning_rate"]
         self.min_learning_rate = self.hparams["min_learning_rate"]
         self.l1_loss_multiplier = self.hparams["l1_loss_multiplier"]
-
-        self.train_data, self.val_data, self.test_data = self.dataset.get_dataloaders(
-            os.path.join(self.hparams["data_dir"], self.hparams["dataset"]),
-            self.batch_size,
-            get_augments(self.dataset.image_height, self.dataset.image_width))
+        self.dataset = dataset
+        self.val_data = val_data
+        self.train_data = train_data
+        self.test_data = test_data
 
         self.optimizer = self.get_optimizer()
         self.batches_to_write = 2
@@ -79,57 +77,55 @@ class Segmenter(pl.LightningModule):
 
     def sample_loss(self, y_hat, y):
         focal_loss = FocalLoss("binary")(y_hat, y)
-        dice_loss = smp.losses.DiceLoss("binary", log_loss=True, from_logits=False)(y_hat, y)
+        dice_loss = smp.losses.DiceLoss("binary",
+                                        log_loss=True,
+                                        from_logits=False)(y_hat, y)
         l1_loss = self.sum_parameter_weights()
 
         weighted_focal_loss = self.focal_loss_multiplier * focal_loss
         weighted_dice_loss = self.dice_loss_multiplier * dice_loss
         weighted_l1_loss = self.l1_loss_multiplier * l1_loss
 
-        weighted_loss =  {
-                "focal_loss": weighted_focal_loss,
-                "dice_loss": weighted_dice_loss,
-                "l1_loss": weighted_l1_loss
-            }
+        weighted_loss_values = {
+            "focal_loss": weighted_focal_loss,
+            "dice_loss": weighted_dice_loss,
+            "l1_loss": weighted_l1_loss
+        }
 
-        unweighted_loss = {
+        unweighted_loss_values = {
             "focal_loss": focal_loss,
             "dice_loss": dice_loss,
             "l1_loss": l1_loss
         }
 
-        return weighted_loss, unweighted_loss
+        return weighted_loss_values, unweighted_loss_values
 
     def loss(self, y_hat, y):
 
-        loss_names = [
-            "focal_loss", "dice_loss", "l1_loss"
-        ]
+        loss_names = ["focal_loss", "dice_loss", "l1_loss"]
 
-        aggregated_weighted_loss = [
-            [],
-            [],
-            []
-        ]
+        aggregated_weighted_loss = [[], [], []]
         weights = self.dataset.loss_weights
 
         assert len(weights) == y_hat.shape[1]
         for i, w in enumerate(weights):
             i_y = y[:, i, :, :].unsqueeze(1)
             i_y_hat = y_hat[:, i, :, :].unsqueeze(1)
-            weighted_loss, unweighted_loss = self.sample_loss(i_y_hat.clone(), i_y.clone())
+            weighted_loss_values, unweighted_loss_values = self.sample_loss(
+                i_y_hat.clone(), i_y.clone())
 
-            for i, (k, v) in enumerate(weighted_loss.items()):
+            for i, (k, v) in enumerate(weighted_loss_values.items()):
                 class_name = list(self.dataset.classes.keys())[i]
                 self.log("class_{}_weighted_{}".format(class_name, k), v)
                 aggregated_weighted_loss[i].append(v * w)
 
-            for k, v in unweighted_loss.items():
+            for k, v in unweighted_loss_values.items():
                 class_name = list(self.dataset.classes.keys())[i]
                 self.log("class_{}_unweighted_{}".format(class_name, k), v)
 
         for i, items in enumerate(aggregated_weighted_loss):
-            aggregated_weighted_loss[i] = torch.stack(aggregated_weighted_loss[i]).mean()
+            aggregated_weighted_loss[i] = torch.stack(
+                aggregated_weighted_loss[i]).mean()
             self.log(loss_names[i], aggregated_weighted_loss[i], prog_bar=True)
 
         loss = torch.stack(aggregated_weighted_loss).sum()
@@ -158,14 +154,14 @@ class Segmenter(pl.LightningModule):
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_data,
-                                           batch_size=self.batch_size,
+                                           batch_size=1,
                                            num_workers=self.num_workers,
                                            shuffle=False,
                                            drop_last=False)
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.test_data,
-                                           batch_size=min(4, self.batch_size),
+                                           batch_size=1,
                                            num_workers=self.num_workers,
                                            shuffle=False,
                                            drop_last=False)
@@ -240,24 +236,15 @@ class Segmenter(pl.LightningModule):
         except AttributeError:
             return
 
-        x[1, :, :, :] = np.flip(x[1, :, :, :], [1])
-        x[2, :, :, :] = np.flip(x[2, :, :, :], [2])
-        x[3, :, :, :] = np.flip(x[3, :, :, :], [1, 2])
-
-        y_hat[1, :, :, :] = np.flip(y_hat[1, :, :, :], [1])
-        y_hat[2, :, :, :] = np.flip(y_hat[2, :, :, :], [2])
-        y_hat[3, :, :, :] = np.flip(y_hat[3, :, :, :], [1, 2])
-
-        mask = y[0, :, :, :]
-        mask = mask.transpose(1, 2, 0)
-
-        mask_img = np.argmax(mask, axis=2) * self.intensity
-
         for i in range(y_hat.shape[0]):
 
             img = x[i, :, :, :]
             img = img - np.min(img)
             img = img.transpose(1, 2, 0)
+
+            mask = y[i, :, :, :]
+            mask = mask.transpose(1, 2, 0)
+            mask_img = np.argmax(mask, axis=2) * self.intensity
 
             predicted_mask = y_hat[i, :, :, :]
             predicted_mask = predicted_mask.transpose(1, 2, 0)
@@ -268,15 +255,3 @@ class Segmenter(pl.LightningModule):
                                    "{}_{}.png".format(batch_idx, i))
 
             self.save_prediction(img, mask_img, predicted_mask_img, outfile)
-
-        img = x[0, :, :, :]
-        img = img - np.min(img)
-        img = img.transpose(1, 2, 0)
-
-        predicted_mask = 1 - np.prod(1 - y_hat, axis=0)
-        predicted_mask = predicted_mask.transpose(1, 2, 0)
-        predicted_mask_img = np.argmax(predicted_mask, axis=2) * self.intensity
-
-        outfile = os.path.join(self.logger.log_dir, "{}.png".format(batch_idx))
-
-        self.save_prediction(img, mask_img, predicted_mask_img, outfile)
