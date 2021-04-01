@@ -58,7 +58,7 @@ class AugmentedDataset:
                 transformed_coverage_percent = transformed_coverage / transformed_coverage.sum(
                 )
                 transformed_coverage_percent = np.clip(
-                    transformed_coverage_percent, a_min=0, a_max=None)
+                    transformed_coverage_percent, a_min=eps, a_max=None)
                 relative_coverage = transformed_coverage_percent / coverage_percent
                 min_transformed_coverage = relative_coverage[1:].min()
 
