@@ -52,8 +52,10 @@ def focal_loss(output: torch.Tensor,
         loss *= alpha * target + (1 - alpha) * (1 - target)
 
     if weights is not None:
-        import pdb
-        pdb.set_trace()
+        for i, w in enumerate(weights):
+            loss[:, i, ::] *= w
+
+    loss = loss.view(-1)
 
     if normalized:
         norm_factor = focal_term.sum().clamp_min(eps)
@@ -79,15 +81,52 @@ class FocalLoss(smp.losses.FocalLoss):
         reduction: Optional[str] = "mean",
         normalized: bool = False,
         reduced_threshold: Optional[float] = None,
+        weights=None,
     ):
         super().__init__(mode, alpha, gamma, ignore_index, reduction,
                          normalized, reduced_threshold)
 
-        self.focal_loss_fn = partial(
-            focal_loss,
-            alpha=alpha,
-            gamma=gamma,
-            reduced_threshold=reduced_threshold,
-            reduction=reduction,
-            normalized=normalized,
-        )
+        self.focal_loss_fn = partial(focal_loss,
+                                     alpha=alpha,
+                                     gamma=gamma,
+                                     reduced_threshold=reduced_threshold,
+                                     reduction=reduction,
+                                     normalized=normalized,
+                                     weights=weights)
+
+    def forward(self, y_pred: torch.Tensor,
+                y_true: torch.Tensor) -> torch.Tensor:
+
+        if self.mode in {
+                smp.losses.constants.BINARY_MODE,
+                smp.losses.constants.MULTILABEL_MODE
+        }:
+
+            if self.ignore_index is not None:
+                # Filter predictions with ignore label from loss computation
+                not_ignored = y_true != self.ignore_index
+                y_pred = y_pred[not_ignored]
+                y_true = y_true[not_ignored]
+
+            loss = self.focal_loss_fn(y_pred, y_true)
+
+        elif self.mode == smp.losses.constants.MULTICLASS_MODE:
+
+            num_classes = y_pred.size(1)
+            loss = 0
+
+            # Filter anchors with -1 label from loss computation
+            if self.ignore_index is not None:
+                not_ignored = y_true != self.ignore_index
+
+            for cls in range(num_classes):
+                cls_y_true = (y_true == cls).long()
+                cls_y_pred = y_pred[:, cls, ...]
+
+                if self.ignore_index is not None:
+                    cls_y_true = cls_y_true[not_ignored]
+                    cls_y_pred = cls_y_pred[not_ignored]
+
+                loss += self.focal_loss_fn(cls_y_pred, cls_y_true)
+
+        return loss

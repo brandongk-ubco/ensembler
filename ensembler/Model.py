@@ -5,6 +5,7 @@ import numpy as np
 import os
 from matplotlib import pyplot as plt
 from ensembler.losses import FocalLoss
+from ensembler.utils import crop_image_only_outside
 
 
 class Segmenter(pl.LightningModule):
@@ -72,9 +73,13 @@ class Segmenter(pl.LightningModule):
             torch.nn.init.kaiming_uniform_(m.weight.data)
             torch.nn.init.constant_(m.bias.data, 0)
 
-    def sample_loss(self, y_hat, y, mode="binary"):
-        focal_loss = FocalLoss(mode)(y_hat, y)
-        dice_loss = smp.losses.DiceLoss(mode, from_logits=False)(y_hat, y)
+    def sample_loss(self, y_hat, y):
+        focal_loss = FocalLoss("multilabel",
+                               weights=self.dataset.loss_weights)(y_hat, y)
+        dice_loss = smp.losses.DiceLoss(
+            "multilabel",
+            from_logits=False,
+            classes=range(1, self.dataset.num_classes))(y_hat, y)
         l1_loss = self.sum_parameter_weights()
 
         weighted_focal_loss = self.focal_loss_multiplier * focal_loss
@@ -95,40 +100,9 @@ class Segmenter(pl.LightningModule):
 
         return weighted_loss_values, unweighted_loss_values
 
-    def weighted_loss(self, y_hat, y):
-        loss_names = ["focal_loss", "dice_loss", "l1_loss"]
-
-        aggregated_weighted_loss = [[], [], []]
-        weights = self.dataset.loss_weights
-
-        assert len(weights) == y_hat.shape[1]
-        for i, w in enumerate(weights):
-            i_y = y[:, i, :, :].unsqueeze(1)
-            i_y_hat = y_hat[:, i, :, :].unsqueeze(1)
-            weighted_loss_values, unweighted_loss_values = self.sample_loss(
-                i_y_hat.clone(), i_y.clone(), mode="binary")
-
-            for i, (k, v) in enumerate(weighted_loss_values.items()):
-                class_name = list(self.dataset.classes.keys())[i]
-                self.log("class_{}_weighted_{}".format(class_name, k), v)
-                aggregated_weighted_loss[i].append(v * w)
-
-            for k, v in unweighted_loss_values.items():
-                class_name = list(self.dataset.classes.keys())[i]
-                self.log("class_{}_unweighted_{}".format(class_name, k), v)
-
-        for i, items in enumerate(aggregated_weighted_loss):
-            aggregated_weighted_loss[i] = torch.stack(
-                aggregated_weighted_loss[i]).mean()
-            self.log(loss_names[i], aggregated_weighted_loss[i], prog_bar=True)
-
-        loss = torch.stack(aggregated_weighted_loss).sum()
-
-        return loss
-
-    def unweighted_loss(self, y_hat, y):
+    def loss(self, y_hat, y):
         weighted_loss_values, unweighted_loss_values = self.sample_loss(
-            y_hat.clone(), y.clone(), mode="multilabel")
+            y_hat.clone(), y.clone())
 
         for k, v in unweighted_loss_values.items():
             self.log("unweighted_{}".format(k), v)
@@ -136,12 +110,9 @@ class Segmenter(pl.LightningModule):
         for k, v in weighted_loss_values.items():
             self.log(k, v, prog_bar=True)
 
-        loss = torch.stack(list(weighted_loss_values.values()).sum()
-        return loss
+        loss = torch.stack(list(weighted_loss_values.values())).sum()
 
-    def loss(self, y_hat, y):
-        return self.unweighted_loss(y_hat, y)
-        # return self.weighted_loss(y_hat, y)
+        return loss
 
     def sum_parameter_weights(self, normalize=True):
         sum_val = torch.stack([
@@ -254,7 +225,6 @@ class Segmenter(pl.LightningModule):
             return
 
         for i in range(y_hat.shape[0]):
-
             img = x[i, :, :, :]
             img = img - np.min(img)
             img = img.transpose(1, 2, 0)
@@ -267,6 +237,14 @@ class Segmenter(pl.LightningModule):
             predicted_mask = predicted_mask.transpose(1, 2, 0)
             predicted_mask_img = np.argmax(predicted_mask,
                                            axis=2) * self.intensity
+
+            row_start, row_end, col_start, col_end = crop_image_only_outside(
+                img)
+
+            img = img[row_start:row_end, col_start:col_end, :]
+            mask_img = mask_img[row_start:row_end, col_start:col_end]
+            predicted_mask_img = predicted_mask_img[row_start:row_end,
+                                                    col_start:col_end]
 
             outfile = os.path.join(self.logger.log_dir,
                                    "{}_{}.png".format(batch_idx, i))
