@@ -10,6 +10,7 @@ def parse_parameters():
     parser.add_argument(dest="dataset_name",
                         type=str,
                         choices=Datasets.choices())
+    parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--data_dir',
                         type=str,
                         nargs='?',

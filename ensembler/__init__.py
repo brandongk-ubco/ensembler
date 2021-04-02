@@ -5,7 +5,7 @@ from ensembler import dataset_statistics
 
 class Tasks(Enum):
     train = "train"
-    dataset_statistic = "dataset-statistics"
+    dataset_statistic = "dataset_statistics"
 
     def __str__(self):
         return self.name
@@ -20,7 +20,7 @@ class Tasks(Enum):
     def description(task):
         if task == "train":
             return train.description
-        if task == "dataset-statistics":
+        if task == "dataset_statistics":
             return dataset_statistics.description
 
         raise ValueError("Task {} not defined".format(task))
@@ -28,7 +28,7 @@ class Tasks(Enum):
     def add_argparse_args(task):
         if task == "train":
             return train.add_argparse_args
-        if task == "dataset-statistics":
+        if task == "dataset_statistics":
             return dataset_statistics.add_argparse_args
 
         raise ValueError("Task {} not defined".format(task))
@@ -36,7 +36,7 @@ class Tasks(Enum):
     def get(task):
         if task == "train":
             return train.execute
-        if task == "dataset-statistics":
+        if task == "dataset_statistics":
             return dataset_statistics.execute
 
         raise ValueError("Task {} not defined".format(task))

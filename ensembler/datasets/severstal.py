@@ -6,12 +6,13 @@ import numpy as np
 import pandas as pd
 from ensembler.datasets.AugmentedDataset import DatasetAugmenter
 from ensembler.datasets.helpers import split_dataset, sample_dataset
+import glob
 
 image_height = 256
 image_width = 1600
 num_classes = 5
 # loss_weights = [1.063732, 697.93036, 3272.005379, 20.793984, 99.165978]
-loss_weights = [1.] * num_classes
+loss_weights = [0., 1., 1., 1., 1.]
 classes = {"background": 0, "1": 50, "2": 100, "3": 200, "4": 250}
 num_channels = 1
 
@@ -21,38 +22,58 @@ class SeverstalDataset(Dataset):
 
     cache = {}
 
-    def __init__(self, severstal_folder, val_percent=1., split="train"):
+    def __init__(self,
+                 severstal_folder,
+                 test_percent=15.,
+                 val_percent=10.,
+                 split="train"):
         self.split = split
         self.severstal_folder = severstal_folder
 
-        with open(os.path.join(self.severstal_folder, "split.json"),
-                  "r") as splitjson:
-            sample_split = json.load(splitjson)
-
-        test_images = sample_split["test"]
-        trainval_images = sample_split["trainval"]
-
-        statistics_file = os.path.join(self.severstal_folder,
-                                       "class_samples.csv")
-        dataset_df = pd.read_csv(statistics_file)
-        trainval_df = dataset_df[dataset_df["sample"].isin(trainval_images)]
-
-        trainval_df = sample_dataset(trainval_df)
-        val_df, train_df = split_dataset(trainval_df, 10.)
-
-        val_images = val_df["sample"].tolist()
-        train_images = train_df["sample"].tolist()
-
-        if self.split == "train":
-            self.images = train_images
-        elif self.split == "val":
-            self.images = val_images
-        elif self.split == "test":
-            self.images = test_images
-        elif self.split == "all":
-            self.images = test_images + trainval_images
+        if self.split == "all":
+            file_search = os.path.join(self.severstal_folder, "*.npz")
+            files = glob.glob(file_search)
+            self.images = [
+                os.path.splitext(os.path.basename(f))[0] for f in files
+            ]
         else:
-            raise ValueError("Split should be one of train, val, test or all")
+            with open(os.path.join(self.severstal_folder, "split.json"),
+                      "r") as splitjson:
+                sample_split = json.load(splitjson)
+
+            test_images = sample_split["test"]
+            trainval_images = sample_split["trainval"]
+
+            statistics_file = os.path.join(self.severstal_folder,
+                                           "class_samples.csv")
+            dataset_df = pd.read_csv(statistics_file)
+            trainval_df = dataset_df[dataset_df["sample"].isin(
+                trainval_images)]
+            test_df = dataset_df[dataset_df["sample"].isin(test_images)]
+
+            trainval_df = sample_dataset(trainval_df)
+            val_df, train_df = split_dataset(trainval_df, val_percent)
+
+            val_images = val_df["sample"].tolist()
+            train_images = train_df["sample"].tolist()
+
+            val_counts = val_df.astype(bool).sum(axis=0)[2:]
+            train_counts = train_df.astype(bool).sum(axis=0)[2:]
+            test_counts = test_df.astype(bool).sum(axis=0)[2:]
+
+            print("Train Class Count: {}".format(train_counts))
+            print("Validation Class Count: {}".format(val_counts))
+            print("Test Class Count: {}".format(test_counts))
+
+            if self.split == "train":
+                self.images = train_images
+            elif self.split == "val":
+                self.images = val_images
+            elif self.split == "test":
+                self.images = test_images
+            else:
+                raise ValueError(
+                    "Split should be one of train, val, test or all")
 
     def get_image_names(self):
         return self.images
@@ -86,16 +107,25 @@ class SeverstalDataset(Dataset):
         return (image, mask)
 
 
-def get_dataloaders(directory, augmentations):
+def get_all_dataloader(directory):
+    return SeverstalDataset(directory, split="all")
+
+
+def get_dataloaders(directory, augmenters, batch_size, augmentations):
 
     train_data = SeverstalDataset(directory, split="train")
     val_data = SeverstalDataset(directory, split="val")
     test_data = SeverstalDataset(directory, split="test")
-    all_data = SeverstalDataset(directory, split="all")
 
-    train_transform, val_transform, test_transform = augmentations
-    train_data = DatasetAugmenter(train_data, train_transform, shuffle=True)
-    val_data = DatasetAugmenter(val_data, val_transform)
-    test_data = DatasetAugmenter(test_data, test_transform)
+    train_transform, patch_transform, test_transform = augmentations
+    train_augmenter, val_augmenter = augmenters
 
-    return train_data, val_data, test_data, all_data
+    train_data = train_augmenter(train_data,
+                                 patch_transform,
+                                 augments=train_transform,
+                                 batch_size=batch_size,
+                                 shuffle=True)
+    val_data = val_augmenter(val_data, test_transform)
+    test_data = val_augmenter(test_data, test_transform)
+
+    return train_data, val_data, test_data

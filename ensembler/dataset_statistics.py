@@ -16,11 +16,11 @@ def execute(args):
 
     dict_args = vars(args)
 
-    outdir = os.path.join(dict_args["data_dir"], dict_args["dataset"])
+    outdir = os.path.join(dict_args["data_dir"], dict_args["dataset_name"])
 
-    dataset = Datasets.get(dict_args["dataset"])
+    dataset = Datasets.get(dict_args["dataset_name"])
     all_data = dataset.get_all_dataloader(
-        os.path.join(dict_args["data_dir"], dict_args["dataset"]))
+        os.path.join(dict_args["data_dir"], dict_args["dataset_name"]))
 
     dataloader = torch.utils.data.DataLoader(
         all_data,
