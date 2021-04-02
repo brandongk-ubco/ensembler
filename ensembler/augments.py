@@ -11,15 +11,19 @@ def get_augments(image_height, image_width):
 
     train_transform = A.Compose([
         A.FromFloat(dtype='uint8', always_apply=True),
+        A.Flip(p=0.25),
         A.OneOf([
             A.CoarseDropout(),
             A.GaussNoise(),
-            A.ISONoise(),
             A.MultiplicativeNoise(),
+        ],
+                p=0.25),
+        A.OneOf([
             A.RandomBrightness(),
             A.RandomBrightnessContrast(),
             A.RandomContrast()
-        ]),
+        ],
+                p=0.25),
         A.ToFloat(always_apply=True),
     ])
 

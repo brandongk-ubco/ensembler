@@ -162,6 +162,10 @@ class Segmenter(pl.LightningModule):
         assert x.shape[2:] == y.shape[2:]
 
         loss = self.loss(y_hat, y)
+        self.write_train_predictions(x.clone().detach().cpu().numpy(),
+                                     y.clone().detach().cpu().numpy(),
+                                     y_hat.clone().detach().cpu().numpy(),
+                                     batch_idx)
         return loss
 
     def forward(self, x):
@@ -169,12 +173,13 @@ class Segmenter(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self.model(x)
+        y_hat = self(x)
         loss = self.loss(y_hat, y)
         self.log("val_loss", loss, prog_bar=True)
-        self.write_predictions(x.clone().detach().cpu().numpy(),
-                               y.clone().detach().cpu().numpy(),
-                               y_hat.clone().detach().cpu().numpy(), batch_idx)
+        self.write_val_predictions(x.clone().detach().cpu().numpy(),
+                                   y.clone().detach().cpu().numpy(),
+                                   y_hat.clone().detach().cpu().numpy(),
+                                   batch_idx)
         return {"val_loss", loss}
 
     def configure_optimizers(self):
@@ -214,7 +219,7 @@ class Segmenter(pl.LightningModule):
         plt.savefig(outfile)
         plt.close()
 
-    def write_predictions(self, x, y, y_hat, batch_idx):
+    def write_val_predictions(self, x, y, y_hat, batch_idx):
 
         if batch_idx >= self.batches_to_write:
             return
@@ -247,6 +252,35 @@ class Segmenter(pl.LightningModule):
                                                     col_start:col_end]
 
             outfile = os.path.join(self.logger.log_dir,
-                                   "{}_{}.png".format(batch_idx, i))
+                                   "validation_{}_{}.png".format(batch_idx, i))
+
+            self.save_prediction(img, mask_img, predicted_mask_img, outfile)
+
+    def write_train_predictions(self, x, y, y_hat, batch_idx):
+
+        if batch_idx >= self.batches_to_write:
+            return
+
+        try:
+            self.logger.log_dir
+        except AttributeError:
+            return
+
+        for i in range(y_hat.shape[0]):
+            img = x[i, :, :, :]
+            img = img - np.min(img)
+            img = img.transpose(1, 2, 0)
+
+            mask = y[i, :, :, :]
+            mask = mask.transpose(1, 2, 0)
+            mask_img = np.argmax(mask, axis=2) * self.intensity
+
+            predicted_mask = y_hat[i, :, :, :]
+            predicted_mask = predicted_mask.transpose(1, 2, 0)
+            predicted_mask_img = np.argmax(predicted_mask,
+                                           axis=2) * self.intensity
+
+            outfile = os.path.join(self.logger.log_dir,
+                                   "train_{}_{}.png".format(batch_idx, i))
 
             self.save_prediction(img, mask_img, predicted_mask_img, outfile)

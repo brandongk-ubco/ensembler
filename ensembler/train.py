@@ -15,13 +15,13 @@ def add_argparse_args(parser):
     parser.add_argument('--num_workers', type=int, default=os.cpu_count() // 2)
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
-    parser.add_argument('--accumulate_grad_batches', type=int, default=1)
+    parser.add_argument('--accumulate_grad_batches', type=int, default=4)
     parser = model.add_model_specific_args(parser)
     return parser
 
 
 def get_augmenters():
-    return BatchDatasetAugmenter, DatasetAugmenter
+    return DatasetAugmenter, DatasetAugmenter
 
 
 def execute(args):
