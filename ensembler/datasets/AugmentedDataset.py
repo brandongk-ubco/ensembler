@@ -112,7 +112,9 @@ class BatchDatasetAugmenter(AugmentedDataset):
             image = np.flip(image, [0, 1])
             mask = np.flip(mask, [0, 1])
         elif self.augments is not None:
-            image = self.augments(image=image)["image"]
+            transformed = self.augments(image=image)
+            image = transformed["image"]
+            mask = transformed["mask"]
         else:
             raise ValueError(
                 "Batch Size too large, must supply augments to generate additional samples"
