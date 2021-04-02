@@ -13,11 +13,9 @@ def get_augments(image_height, image_width):
         A.FromFloat(dtype='uint8', always_apply=True),
         A.Flip(p=0.25),
         A.OneOf([
-            A.CoarseDropout(),
             A.GaussNoise(),
             A.MultiplicativeNoise(),
-        ],
-                p=0.25),
+        ], p=0.25),
         A.OneOf([
             A.RandomBrightness(),
             A.RandomBrightnessContrast(),
