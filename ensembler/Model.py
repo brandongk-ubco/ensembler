@@ -39,7 +39,7 @@ class Segmenter(pl.LightningModule):
     def add_model_specific_args(parser):
         parser.add_argument('--encoder_name',
                             type=str,
-                            default="efficientnet-b4")
+                            default="efficientnet-b7")
         parser.add_argument('--depth', type=int, default=5)
         parser.add_argument('--batch_loss_multiplier',
                             type=float,

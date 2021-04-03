@@ -13,9 +13,9 @@ description = "Train a model."
 def add_argparse_args(parser):
     parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--num_workers', type=int, default=os.cpu_count() // 2)
-    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
-    parser.add_argument('--accumulate_grad_batches', type=int, default=4)
+    parser.add_argument('--accumulate_grad_batches', type=int, default=10)
     parser = model.add_model_specific_args(parser)
     return parser
 
@@ -30,7 +30,7 @@ def execute(args):
 
     callbacks = [
         pl.callbacks.EarlyStopping('val_loss',
-                                   patience=2 * dict_args["patience"]),
+                                   patience=3 * dict_args["patience"]),
         pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
         RecordTrainStatus()
     ]
