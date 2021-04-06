@@ -3,15 +3,14 @@ from torch.utils.data import Dataset
 import os
 from PIL import Image
 import numpy as np
-from ensembler.datasets.AugmentedDataset import DatasetAugmenter
 import pandas as pd
 from ensembler.datasets.helpers import split_dataset, sample_dataset
 import json
 
-image_height = 768
-image_width = 1024
+image_height = 1280
+image_width = 1536
 num_classes = 4
-loss_weights = [1, 1, 2, 1]
+loss_weights = [0., 1., 1., 1.]
 classes = {"background": 0, "gripper": 50, "wrinkle": 100, "fabric": 200}
 num_channels = 3
 
@@ -21,7 +20,7 @@ class WrinklerDataset(Dataset):
     def __init__(self,
                  wrinkler_folder,
                  test_percent=15.,
-                 val_percent=5.,
+                 val_percent=10.,
                  split="train"):
         self.split = split
         self.wrinkler_folder = wrinkler_folder
@@ -39,7 +38,7 @@ class WrinklerDataset(Dataset):
         trainval_df = dataset_df[dataset_df["sample"].isin(trainval_images)]
 
         trainval_df = sample_dataset(trainval_df)
-        val_df, train_df = split_dataset(trainval_df, 10.)
+        val_df, train_df = split_dataset(trainval_df, val_percent)
 
         val_images = val_df["sample"].tolist()
         train_images = train_df["sample"].tolist()

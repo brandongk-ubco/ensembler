@@ -29,17 +29,6 @@ class AugmentedDataset:
         image = np.array(image)
         mask = np.array(mask)
 
-        if image.shape[2] == 3:
-            image = rgb2hsv(image)
-            image[:, :, 2] = contrast_stretch(image[:, :, 2])
-            image = hsv2rgb(image)
-        elif image.shape[2] == 1:
-            image = contrast_stretch(image)
-        else:
-            raise ValueError(
-                "Was expecting a 1-channel (greyscale) or 3-channel (colour) image.  Found {} channels"
-                .format(image.shape[2]))
-
         eps = np.finfo(mask.dtype).eps
 
         coverage = mask.sum(0).sum(0)
@@ -65,70 +54,84 @@ class AugmentedDataset:
                 if min_transformed_coverage > 0.3:
                     break
 
+        image = transformed_image
+        mask = transformed_mask
+
+        if image.shape[2] == 3:
+            image = rgb2hsv(image)
+            image[:, :, 2] = contrast_stretch(image[:, :, 2])
+            image = hsv2rgb(image)
+        elif image.shape[2] == 1:
+            image = contrast_stretch(image)
+        else:
+            raise ValueError(
+                "Was expecting a 1-channel (greyscale) or 3-channel (colour) image.  Found {} channels"
+                .format(image.shape[2]))
+
         return transformed_image, transformed_mask
 
 
-class BatchDatasetAugmenter(AugmentedDataset):
+# class BatchDatasetAugmenter(AugmentedDataset):
 
-    lastItem = None
+#     lastItem = None
 
-    def __init__(self,
-                 dataset,
-                 patch_transform,
-                 batch_size,
-                 augments=None,
-                 shuffle=False):
-        super().__init__(dataset, patch_transform)
-        num_elements = len(self.dataset)
-        self.data_map = list(range(num_elements))
-        self.shuffle = shuffle
-        self.batch_size = batch_size
-        self.augments = augments
+#     def __init__(self,
+#                  dataset,
+#                  patch_transform,
+#                  batch_size,
+#                  augments=None,
+#                  shuffle=False):
+#         super().__init__(dataset, patch_transform)
+#         num_elements = len(self.dataset)
+#         self.data_map = list(range(num_elements))
+#         self.shuffle = shuffle
+#         self.batch_size = batch_size
+#         self.augments = augments
 
-    def __len__(self):
-        return len(self.dataset) * self.batch_size
+#     def __len__(self):
+#         return len(self.dataset) * self.batch_size
 
-    def __getitem__(self, idx):
-        if idx == 0 and self.shuffle:
-            random.shuffle(self.data_map)
+#     def __getitem__(self, idx):
+#         if idx == 0 and self.shuffle:
+#             random.shuffle(self.data_map)
 
-        dataset_idx = idx // self.batch_size
-        flip_idx = idx % self.batch_size
+#         dataset_idx = idx // self.batch_size
+#         flip_idx = idx % self.batch_size
 
-        if flip_idx == 0:
-            self.lastItem = super().__getitem__(self.data_map[dataset_idx])
+#         if flip_idx == 0:
+#             self.lastItem = super().__getitem__(self.data_map[dataset_idx])
 
-        image, mask = self.lastItem
+#         image, mask = self.lastItem
 
-        if flip_idx == 0:
-            pass
-        elif flip_idx == 1:
-            image = np.flip(image, [0])
-            mask = np.flip(mask, [0])
-        elif flip_idx == 2:
-            image = np.flip(image, [1])
-            mask = np.flip(mask, [1])
-        elif flip_idx == 3:
-            image = np.flip(image, [0, 1])
-            mask = np.flip(mask, [0, 1])
-        elif self.augments is not None:
-            transformed = self.augments(image=image, mask=mask)
-            image = transformed["image"]
-            mask = transformed["mask"]
-        else:
-            raise ValueError(
-                "Batch Size too large, must supply augments to generate additional samples"
-            )
+#         if flip_idx == 0:
+#             pass
+#         elif flip_idx == 1:
+#             image = np.flip(image, [0])
+#             mask = np.flip(mask, [0])
+#         elif flip_idx == 2:
+#             image = np.flip(image, [1])
+#             mask = np.flip(mask, [1])
+#         elif flip_idx == 3:
+#             image = np.flip(image, [0, 1])
+#             mask = np.flip(mask, [0, 1])
+#         elif self.augments is not None:
+#             transformed = self.augments(image=image, mask=mask)
+#             image = transformed["image"]
+#             mask = transformed["mask"]
+#         else:
+#             raise ValueError(
+#                 "Batch Size too large, must supply augments to generate additional samples"
+#             )
 
-        image -= np.min(image)
-        image /= np.max(image)
-        image = np.clip(image, 0., 1.)
-        image = image - np.mean(image)
+#         image -= np.min(image)
+#         image /= np.max(image)
+#         image = np.clip(image, 0., 1.)
+#         image = image - np.mean(image)
 
-        image = image.transpose(2, 0, 1)
-        mask = mask.transpose(2, 0, 1)
+#         image = image.transpose(2, 0, 1)
+#         mask = mask.transpose(2, 0, 1)
 
-        return torch.from_numpy(image.copy()), torch.from_numpy(mask.copy())
+#         return torch.from_numpy(image.copy()), torch.from_numpy(mask.copy())
 
 
 class DatasetAugmenter(AugmentedDataset):
@@ -151,15 +154,15 @@ class DatasetAugmenter(AugmentedDataset):
 
         image, mask = super().__getitem__(self.data_map[idx])
 
-        if self.augments is not None:
-            transformed = self.augments(image=image, mask=mask)
-            image = transformed["image"]
-            mask = transformed["mask"]
+        # if self.augments is not None:
+        #     transformed = self.augments(image=image, mask=mask)
+        #     image = transformed["image"]
+        #     mask = transformed["mask"]
 
-        image -= np.min(image)
-        image /= np.max(image)
-        image = np.clip(image, 0., 1.)
-        image = image - np.mean(image)
+        # image -= np.min(image)
+        # image /= np.max(image)
+        # image = np.clip(image, 0., 1.)
+        # image = image - np.mean(image)
 
         image = image.transpose(2, 0, 1)
         mask = mask.transpose(2, 0, 1)

@@ -72,17 +72,15 @@ def focal_loss(output: torch.Tensor,
 
 
 class FocalLoss(smp.losses.FocalLoss):
-    def __init__(
-        self,
-        mode: str,
-        alpha: Optional[float] = None,
-        gamma: Optional[float] = 2.,
-        ignore_index: Optional[int] = None,
-        reduction: Optional[str] = "mean",
-        normalized: bool = False,
-        reduced_threshold: Optional[float] = None,
-        weights=None,
-    ):
+    def __init__(self,
+                 mode: str,
+                 alpha: Optional[float] = None,
+                 gamma: Optional[float] = 2.,
+                 ignore_index: Optional[int] = None,
+                 reduction: Optional[str] = "mean",
+                 normalized: bool = False,
+                 reduced_threshold: Optional[float] = None,
+                 weights=None):
         super().__init__(mode, alpha, gamma, ignore_index, reduction,
                          normalized, reduced_threshold)
 

@@ -39,15 +39,15 @@ class Segmenter(pl.LightningModule):
     def add_model_specific_args(parser):
         parser.add_argument('--encoder_name',
                             type=str,
-                            default="efficientnet-b7")
+                            default="efficientnet-b3")
         parser.add_argument('--depth', type=int, default=5)
         parser.add_argument('--batch_loss_multiplier',
                             type=float,
                             default=None)
-        parser.add_argument('--focal_loss_multiplier', type=float, default=1.)
+        parser.add_argument('--focal_loss_multiplier', type=float, default=4.)
         parser.add_argument('--dice_loss_multiplier', type=float, default=1.)
         parser.add_argument('--weight_decay', type=float, default=3e-5)
-        parser.add_argument('--l1_loss_multiplier', type=float, default=3e-5)
+        parser.add_argument('--l1_loss_multiplier', type=float, default=1e-8)
         parser.add_argument('--learning_rate', type=float, default=1e-3)
         parser.add_argument('--min_learning_rate', type=float, default=1e-5)
 
@@ -63,7 +63,7 @@ class Segmenter(pl.LightningModule):
 
     def initialize_weights(self, m):
         if isinstance(m, torch.nn.Conv2d):
-            torch.nn.init.kaiming_uniform_(m.weight.data, nonlinearity='relu')
+            torch.nn.init.kaiming_normal_(m.weight.data)
             if m.bias is not None:
                 torch.nn.init.constant_(m.bias.data, 0)
         elif isinstance(m, torch.nn.BatchNorm2d):
@@ -76,10 +76,11 @@ class Segmenter(pl.LightningModule):
     def sample_loss(self, y_hat, y):
         focal_loss = FocalLoss("multilabel",
                                weights=self.dataset.loss_weights)(y_hat, y)
-        dice_loss = smp.losses.DiceLoss(
-            "multilabel",
-            from_logits=False,
-            classes=range(1, self.dataset.num_classes))(y_hat, y)
+        dice_loss = smp.losses.DiceLoss("multilabel",
+                                        from_logits=False,
+                                        classes=range(
+                                            1, self.dataset.num_classes),
+                                        log_loss=True)(y_hat, y)
         l1_loss = self.sum_parameter_weights()
 
         weighted_focal_loss = self.focal_loss_multiplier * focal_loss
@@ -114,7 +115,7 @@ class Segmenter(pl.LightningModule):
 
         return loss
 
-    def sum_parameter_weights(self, normalize=True):
+    def sum_parameter_weights(self, normalize=False):
         sum_val = torch.stack([
             torch.sum(torch.abs(param))
             for name, param in self.named_parameters()
@@ -157,15 +158,9 @@ class Segmenter(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        assert y_hat.shape == y.shape
-        assert x.shape[0] == y.shape[0]
-        assert x.shape[2:] == y.shape[2:]
-
         loss = self.loss(y_hat, y)
-        self.write_train_predictions(x.clone().detach().cpu().numpy(),
-                                     y.clone().detach().cpu().numpy(),
-                                     y_hat.clone().detach().cpu().numpy(),
-                                     batch_idx)
+        self.write_predictions(x, y, y_hat, batch_idx, prefix="train")
+
         return loss
 
     def forward(self, x):
@@ -175,11 +170,9 @@ class Segmenter(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.loss(y_hat, y)
+        self.write_predictions(x, y, y_hat, batch_idx, prefix="val")
+
         self.log("val_loss", loss, prog_bar=True)
-        self.write_val_predictions(x.clone().detach().cpu().numpy(),
-                                   y.clone().detach().cpu().numpy(),
-                                   y_hat.clone().detach().cpu().numpy(),
-                                   batch_idx)
         return {"val_loss", loss}
 
     def configure_optimizers(self):
@@ -203,9 +196,9 @@ class Segmenter(pl.LightningModule):
         fig, axs = plt.subplots(3, 1)
 
         if img.shape[2] == 1:
-            axs[0].imshow(img.squeeze(), cmap="gray")
+            axs[0].imshow(img.squeeze(), cmap="gray", vmin=0, vmax=255)
         else:
-            axs[0].imshow(img, cmap="gray")
+            axs[0].imshow(img)
 
         axs[1].imshow(mask_img, cmap="gray", vmin=0, vmax=255)
         axs[2].imshow(predicted_mask_img, cmap="gray", vmin=0, vmax=255)
@@ -219,7 +212,10 @@ class Segmenter(pl.LightningModule):
         plt.savefig(outfile)
         plt.close()
 
-    def write_val_predictions(self, x, y, y_hat, batch_idx):
+    def write_predictions(self, x, y, y_hat, batch_idx, prefix=""):
+        x = x.clone().detach().cpu().numpy()
+        y = y.clone().detach().cpu().numpy()
+        y_hat = y_hat.clone().detach().cpu().numpy()
 
         if batch_idx >= self.batches_to_write:
             return
@@ -252,35 +248,6 @@ class Segmenter(pl.LightningModule):
                                                     col_start:col_end]
 
             outfile = os.path.join(self.logger.log_dir,
-                                   "validation_{}_{}.png".format(batch_idx, i))
-
-            self.save_prediction(img, mask_img, predicted_mask_img, outfile)
-
-    def write_train_predictions(self, x, y, y_hat, batch_idx):
-
-        if batch_idx >= self.batches_to_write:
-            return
-
-        try:
-            self.logger.log_dir
-        except AttributeError:
-            return
-
-        for i in range(y_hat.shape[0]):
-            img = x[i, :, :, :]
-            img = img - np.min(img)
-            img = img.transpose(1, 2, 0)
-
-            mask = y[i, :, :, :]
-            mask = mask.transpose(1, 2, 0)
-            mask_img = np.argmax(mask, axis=2) * self.intensity
-
-            predicted_mask = y_hat[i, :, :, :]
-            predicted_mask = predicted_mask.transpose(1, 2, 0)
-            predicted_mask_img = np.argmax(predicted_mask,
-                                           axis=2) * self.intensity
-
-            outfile = os.path.join(self.logger.log_dir,
-                                   "train_{}_{}.png".format(batch_idx, i))
+                                   "{}_{}_{}.png".format(prefix, batch_idx, i))
 
             self.save_prediction(img, mask_img, predicted_mask_img, outfile)

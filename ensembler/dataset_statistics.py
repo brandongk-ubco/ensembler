@@ -9,7 +9,7 @@ description = "Prepare dataset statistics required for sampling."
 
 
 def add_argparse_args(parser):
-    parser.add_argument('--num_workers', type=int, default=os.cpu_count() // 2)
+    parser.add_argument('--num_workers', type=int, default=os.cpu_count() - 1)
 
 
 def execute(args):
