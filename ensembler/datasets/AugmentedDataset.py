@@ -112,7 +112,7 @@ class BatchDatasetAugmenter(AugmentedDataset):
             image = np.flip(image, [0, 1])
             mask = np.flip(mask, [0, 1])
         elif self.augments is not None:
-            transformed = self.augments(image=image)
+            transformed = self.augments(image=image, mask=mask)
             image = transformed["image"]
             mask = transformed["mask"]
         else:
@@ -152,7 +152,9 @@ class DatasetAugmenter(AugmentedDataset):
         image, mask = super().__getitem__(self.data_map[idx])
 
         if self.augments is not None:
-            image = self.augments(image=image)["image"]
+            transformed = self.augments(image=image, mask=mask)
+            image = transformed["image"]
+            mask = transformed["mask"]
 
         image -= np.min(image)
         image /= np.max(image)

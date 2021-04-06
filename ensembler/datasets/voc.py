@@ -20,6 +20,7 @@ image_width = 512
 num_classes = len(classes)
 batch_size = 8
 loss_weights = [1.] * num_classes
+loss_weights[0] = 0.
 num_channels = 3
 
 
