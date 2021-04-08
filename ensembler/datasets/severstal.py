@@ -4,7 +4,7 @@ import os
 import json
 import numpy as np
 import pandas as pd
-from ensembler.datasets.helpers import split_dataset, sample_dataset
+from ensembler.datasets.helpers import process_split
 import glob
 
 image_height = 256
@@ -23,8 +23,9 @@ class SeverstalDataset(Dataset):
 
     def __init__(self,
                  severstal_folder,
-                 test_percent=15.,
-                 val_percent=10.,
+                 train_images=None,
+                 val_images=None,
+                 test_images=None,
                  split="train"):
         self.split = split
         self.severstal_folder = severstal_folder
@@ -36,34 +37,9 @@ class SeverstalDataset(Dataset):
                 os.path.splitext(os.path.basename(f))[0] for f in files
             ]
         else:
-            with open(os.path.join(self.severstal_folder, "split.json"),
-                      "r") as splitjson:
-                sample_split = json.load(splitjson)
-
-            test_images = sample_split["test"]
-            trainval_images = sample_split["trainval"]
-
-            statistics_file = os.path.join(self.severstal_folder,
-                                           "class_samples.csv")
-            dataset_df = pd.read_csv(statistics_file)
-            trainval_df = dataset_df[dataset_df["sample"].isin(
-                trainval_images)]
-            test_df = dataset_df[dataset_df["sample"].isin(test_images)]
-
-            #trainval_df = sample_dataset(trainval_df)
-            val_df, train_df = split_dataset(trainval_df, val_percent)
-
-            val_images = val_df["sample"].tolist()
-            train_images = train_df["sample"].tolist()
-
-            val_counts = val_df.astype(bool).sum(axis=0)[2:]
-            train_counts = train_df.astype(bool).sum(axis=0)[2:]
-            test_counts = test_df.astype(bool).sum(axis=0)[2:]
-
-            print("Train Class Count: {}".format(train_counts))
-            print("Validation Class Count: {}".format(val_counts))
-            print("Test Class Count: {}".format(test_counts))
-
+            assert train_images is not None
+            assert val_images is not None
+            assert test_images is not None
             if self.split == "train":
                 self.images = train_images
             elif self.split == "val":
@@ -112,19 +88,47 @@ def get_all_dataloader(directory):
 
 def get_dataloaders(directory, augmenters, batch_size, augmentations):
 
-    train_data = SeverstalDataset(directory, split="train")
-    val_data = SeverstalDataset(directory, split="val")
-    test_data = SeverstalDataset(directory, split="test")
+    with open(os.path.join(directory, "split.json"), "r") as splitjson:
+        sample_split = json.load(splitjson)
 
-    train_transform, patch_transform, test_transform = augmentations
+    statistics_file = os.path.join(directory, "class_samples.csv")
+
+    train_images, val_images, test_images = process_split(
+        sample_split, statistics_file)
+
+    train_data = SeverstalDataset(directory,
+                                  train_images,
+                                  val_images,
+                                  test_images,
+                                  split="train")
+    val_data = SeverstalDataset(directory,
+                                train_images,
+                                val_images,
+                                test_images,
+                                split="val")
+    test_data = SeverstalDataset(directory,
+                                 train_images,
+                                 val_images,
+                                 test_images,
+                                 split="test")
+
+    preprocessing_transform, train_transform, patch_transform, test_transform = augmentations
     train_augmenter, val_augmenter = augmenters
 
-    train_data = train_augmenter(train_data,
-                                 patch_transform,
-                                 augments=train_transform,
-                                 batch_size=batch_size,
-                                 shuffle=True)
-    val_data = val_augmenter(val_data, test_transform)
-    test_data = val_augmenter(test_data, test_transform)
+    train_data = train_augmenter(
+        train_data,
+        patch_transform,
+        preprocessing_transform=preprocessing_transform,
+        augments=train_transform,
+        batch_size=batch_size,
+        shuffle=True)
+    val_data = val_augmenter(val_data,
+                             test_transform,
+                             preprocessing_transform=preprocessing_transform)
+    test_data = val_augmenter(
+        test_data,
+        test_transform,
+        preprocessing_transform=preprocessing_transform,
+    )
 
     return train_data, val_data, test_data

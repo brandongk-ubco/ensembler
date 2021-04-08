@@ -126,3 +126,31 @@ def sample_dataset(dataframe, seed=42):
     samples = samples.dropna()
 
     return samples
+
+
+def process_split(sample_split, statistics_file):
+
+    test_images = sample_split["test"]
+    trainval_images = sample_split["trainval"]
+
+    dataset_df = pd.read_csv(statistics_file)
+    test_df = dataset_df[dataset_df["sample"].isin(test_images)]
+    trainval_df = dataset_df[dataset_df["sample"].isin(trainval_images)]
+
+    assert len(trainval_images) == len(trainval_df)
+    assert len(test_images) == len(test_df)
+
+    #trainval_df = sample_dataset(trainval_df)
+    val_df, train_df = split_dataset(trainval_df, 10.)
+
+    val_counts = val_df.astype(bool).sum(axis=0)[2:]
+    train_counts = train_df.astype(bool).sum(axis=0)[2:]
+    test_counts = test_df.astype(bool).sum(axis=0)[2:]
+
+    print("Train Class Count: {}".format(train_counts))
+    print("Validation Class Count: {}".format(val_counts))
+    print("Test Class Count: {}".format(test_counts))
+
+    val_images = val_df["sample"].tolist()
+    train_images = train_df["sample"].tolist()
+    return train_images, val_images, test_images

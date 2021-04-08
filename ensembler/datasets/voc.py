@@ -5,8 +5,7 @@ from torch.utils.data import Dataset
 from PIL import Image
 import os
 import json
-import pandas as pd
-from ensembler.datasets.helpers import split_dataset, sample_dataset
+from ensembler.datasets.helpers import process_split
 import random
 
 classes = [
@@ -27,10 +26,9 @@ num_channels = 3
 class VOCDataset(Dataset):
     def __init__(self,
                  voc_folder,
-                 train_images,
-                 val_images,
-                 test_images,
-                 val_percent=5.,
+                 train_images=None,
+                 val_images=None,
+                 test_images=None,
                  split="train"):
 
         self.split = split
@@ -43,7 +41,9 @@ class VOCDataset(Dataset):
         if self.split == "all":
             self.samples = [i for i in zip(data.images, data.masks)]
         else:
-
+            assert train_images is not None
+            assert val_images is not None
+            assert test_images is not None
             if split == "train":
                 sample_from = train_images
             elif split == "val":
@@ -104,34 +104,6 @@ def get_all_dataloader(voc_folder):
     return VOCDataset(voc_folder, split="all")
 
 
-def process_split(sample_split, statistics_file):
-
-    test_images = sample_split["test"]
-    trainval_images = sample_split["trainval"]
-
-    dataset_df = pd.read_csv(statistics_file)
-    test_df = dataset_df[dataset_df["sample"].isin(test_images)]
-    trainval_df = dataset_df[dataset_df["sample"].isin(trainval_images)]
-
-    assert len(trainval_images) == len(trainval_df)
-    assert len(test_images) == len(test_df)
-
-    #trainval_df = sample_dataset(trainval_df)
-    val_df, train_df = split_dataset(trainval_df, 10.)
-
-    val_counts = val_df.astype(bool).sum(axis=0)[2:]
-    train_counts = train_df.astype(bool).sum(axis=0)[2:]
-    test_counts = test_df.astype(bool).sum(axis=0)[2:]
-
-    print("Train Class Count: {}".format(train_counts))
-    print("Validation Class Count: {}".format(val_counts))
-    print("Test Class Count: {}".format(test_counts))
-
-    val_images = val_df["sample"].tolist()
-    train_images = train_df["sample"].tolist()
-    return train_images, val_images, test_images
-
-
 def get_dataloaders(voc_folder, augmenters, batch_size, augmentations):
 
     with open(os.path.join(voc_folder, "split.json"), "r") as splitjson:
@@ -158,15 +130,23 @@ def get_dataloaders(voc_folder, augmenters, batch_size, augmentations):
                            test_images,
                            split="test")
 
-    train_transform, patch_transform, test_transform = augmentations
+    preprocessing_transform, train_transform, patch_transform, test_transform = augmentations
     train_augmenter, val_augmenter = augmenters
 
-    train_data = train_augmenter(train_data,
-                                 patch_transform,
-                                 augments=train_transform,
-                                 batch_size=batch_size,
-                                 shuffle=True)
-    val_data = val_augmenter(val_data, test_transform)
-    test_data = val_augmenter(test_data, test_transform)
+    train_data = train_augmenter(
+        train_data,
+        patch_transform,
+        preprocessing_transform=preprocessing_transform,
+        augments=train_transform,
+        batch_size=batch_size,
+        shuffle=True)
+    val_data = val_augmenter(val_data,
+                             test_transform,
+                             preprocessing_transform=preprocessing_transform)
+    test_data = val_augmenter(
+        test_data,
+        test_transform,
+        preprocessing_transform=preprocessing_transform,
+    )
 
     return train_data, val_data, test_data

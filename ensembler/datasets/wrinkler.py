@@ -3,8 +3,8 @@ from torch.utils.data import Dataset
 import os
 from PIL import Image
 import numpy as np
-import pandas as pd
-from ensembler.datasets.helpers import split_dataset, sample_dataset
+import glob
+from ensembler.datasets.helpers import process_split
 import json
 
 image_height = 256
@@ -19,44 +19,32 @@ class WrinklerDataset(Dataset):
     """Wrinkler dataset."""
     def __init__(self,
                  wrinkler_folder,
-                 test_percent=15.,
-                 val_percent=10.,
+                 train_images=None,
+                 val_images=None,
+                 test_images=None,
                  split="train"):
         self.split = split
         self.wrinkler_folder = wrinkler_folder
 
-        with open(os.path.join(self.wrinkler_folder, "split.json"),
-                  "r") as splitjson:
-            sample_split = json.load(splitjson)
-
-        test_images = sample_split["test"]
-        trainval_images = sample_split["trainval"]
-
-        statistics_file = os.path.join(self.wrinkler_folder,
-                                       "class_samples.csv")
-        dataset_df = pd.read_csv(statistics_file)
-        trainval_df = dataset_df[dataset_df["sample"].isin(trainval_images)]
-
-        # trainval_df = sample_dataset(trainval_df)
-        val_df, train_df = split_dataset(trainval_df, val_percent)
-
-        val_images = val_df["sample"].tolist()
-        train_images = train_df["sample"].tolist()
-
-        if split == "train":
-            self.images = train_images
-        elif split == "val":
-            self.images = val_images
-        elif split == "test":
-            self.images = test_images
-        elif self.split == "all":
-            self.images = test_images + trainval_images
+        if self.split == "all":
+            file_search = os.path.join(self.wrinkler_folder, "Images", "*.png")
+            files = glob.glob(file_search)
+            self.images = [
+                os.path.splitext(os.path.basename(f))[0] for f in files
+            ]
         else:
-            raise ValueError("Split should be one of train, val, test or all")
-
-        self.images = [
-            name for name, ext in [os.path.splitext(i) for i in self.images]
-        ]
+            assert train_images is not None
+            assert val_images is not None
+            assert test_images is not None
+            if self.split == "train":
+                self.images = train_images
+            elif self.split == "val":
+                self.images = val_images
+            elif self.split == "test":
+                self.images = test_images
+            else:
+                raise ValueError(
+                    "Split should be one of train, val, test or all")
 
     def get_image_names(self):
         return self.images
@@ -100,9 +88,29 @@ def get_all_dataloader(directory):
 
 def get_dataloaders(directory, augmenters, batch_size, augmentations):
 
-    train_data = WrinklerDataset(directory, split="train")
-    val_data = WrinklerDataset(directory, split="val")
-    test_data = WrinklerDataset(directory, split="test")
+    with open(os.path.join(directory, "split.json"), "r") as splitjson:
+        sample_split = json.load(splitjson)
+
+    statistics_file = os.path.join(directory, "class_samples.csv")
+
+    train_images, val_images, test_images = process_split(
+        sample_split, statistics_file)
+
+    train_data = WrinklerDataset(directory,
+                                 train_images,
+                                 val_images,
+                                 test_images,
+                                 split="train")
+    val_data = WrinklerDataset(directory,
+                               train_images,
+                               val_images,
+                               test_images,
+                               split="val")
+    test_data = WrinklerDataset(directory,
+                                train_images,
+                                val_images,
+                                test_images,
+                                split="test")
 
     preprocessing_transform, train_transform, patch_transform, test_transform = augmentations
     train_augmenter, val_augmenter = augmenters
