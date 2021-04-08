@@ -15,8 +15,8 @@ classes = [
     "person", "potted plant", "sheep", "sofa", "train", "tv/monitor"
 ]
 
-image_height = 512
-image_width = 512
+image_height = 256
+image_width = 256
 num_classes = len(classes)
 batch_size = 8
 loss_weights = [1.] * num_classes
@@ -116,7 +116,7 @@ def process_split(sample_split, statistics_file):
     assert len(trainval_images) == len(trainval_df)
     assert len(test_images) == len(test_df)
 
-    trainval_df = sample_dataset(trainval_df)
+    #trainval_df = sample_dataset(trainval_df)
     val_df, train_df = split_dataset(trainval_df, 10.)
 
     val_counts = val_df.astype(bool).sum(axis=0)[2:]

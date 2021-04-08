@@ -39,15 +39,15 @@ class Segmenter(pl.LightningModule):
     def add_model_specific_args(parser):
         parser.add_argument('--encoder_name',
                             type=str,
-                            default="efficientnet-b3")
+                            default="efficientnet-b7")
         parser.add_argument('--depth', type=int, default=5)
         parser.add_argument('--batch_loss_multiplier',
                             type=float,
                             default=None)
-        parser.add_argument('--focal_loss_multiplier', type=float, default=4.)
+        parser.add_argument('--focal_loss_multiplier', type=float, default=1.)
         parser.add_argument('--dice_loss_multiplier', type=float, default=1.)
         parser.add_argument('--weight_decay', type=float, default=3e-5)
-        parser.add_argument('--l1_loss_multiplier', type=float, default=1e-8)
+        parser.add_argument('--l1_loss_multiplier', type=float, default=3e-5)
         parser.add_argument('--learning_rate', type=float, default=1e-3)
         parser.add_argument('--min_learning_rate', type=float, default=1e-5)
 
@@ -79,8 +79,7 @@ class Segmenter(pl.LightningModule):
         dice_loss = smp.losses.DiceLoss("multilabel",
                                         from_logits=False,
                                         classes=range(
-                                            1, self.dataset.num_classes),
-                                        log_loss=True)(y_hat, y)
+                                            1, self.dataset.num_classes), log_loss=True)(y_hat, y)
         l1_loss = self.sum_parameter_weights()
 
         weighted_focal_loss = self.focal_loss_multiplier * focal_loss
@@ -115,7 +114,7 @@ class Segmenter(pl.LightningModule):
 
         return loss
 
-    def sum_parameter_weights(self, normalize=False):
+    def sum_parameter_weights(self, normalize=True):
         sum_val = torch.stack([
             torch.sum(torch.abs(param))
             for name, param in self.named_parameters()
@@ -196,7 +195,7 @@ class Segmenter(pl.LightningModule):
         fig, axs = plt.subplots(3, 1)
 
         if img.shape[2] == 1:
-            axs[0].imshow(img.squeeze(), cmap="gray", vmin=0, vmax=255)
+            axs[0].imshow(img.squeeze(), cmap="gray")
         else:
             axs[0].imshow(img)
 

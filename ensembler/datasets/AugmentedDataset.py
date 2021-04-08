@@ -4,7 +4,7 @@ from skimage.color import rgb2hsv, hsv2rgb
 from skimage import exposure
 from skimage.util import dtype_limits
 import random
-
+from ensembler.utils import crop_image_only_outside
 
 def contrast_stretch(image, min_percentile=2, max_percentile=98):
     p2, p98 = np.percentile(image, (min_percentile, max_percentile))
@@ -29,46 +29,27 @@ class AugmentedDataset:
         image = np.array(image)
         mask = np.array(mask)
 
-        eps = np.finfo(mask.dtype).eps
-
-        coverage = mask.sum(0).sum(0)
-        coverage_percent = coverage / coverage.sum()
-        coverage_percent = np.clip(coverage_percent, a_min=eps, a_max=1.)
-
-        transformed_image = image
-        transformed_mask = mask
+        row_start, row_end, col_start, col_end = crop_image_only_outside(image, tol=0.2)
+        image = image[row_start:row_end, col_start:col_end, :]
+        mask = mask[row_start:row_end, col_start:col_end, :]
 
         if self.transform is not None:
-            while True:
-                transformed = self.transform(image=image, mask=mask)
-                transformed_image = transformed["image"]
-                transformed_mask = transformed["mask"]
-                transformed_coverage = transformed_mask.sum(0).sum(0)
-                transformed_coverage_percent = transformed_coverage / transformed_coverage.sum(
-                )
-                transformed_coverage_percent = np.clip(
-                    transformed_coverage_percent, a_min=eps, a_max=None)
-                relative_coverage = transformed_coverage_percent / coverage_percent
-                min_transformed_coverage = relative_coverage[1:].min()
+            transformed = self.transform(image=image, mask=mask)
+            image = transformed["image"]
+            mask = transformed["mask"]
 
-                if min_transformed_coverage > 0.3:
-                    break
+        #if image.shape[2] == 3:
+        #    image = rgb2hsv(image)
+        #    image[:, :, 2] = contrast_stretch(image[:, :, 2])
+        #    image = hsv2rgb(image)
+        #elif image.shape[2] == 1:
+        #    image = contrast_stretch(image)
+        #else:
+        #    raise ValueError(
+        #        "Was expecting a 1-channel (greyscale) or 3-channel (colour) image.  Found {} channels"
+        #        .format(image.shape[2]))
 
-        image = transformed_image
-        mask = transformed_mask
-
-        if image.shape[2] == 3:
-            image = rgb2hsv(image)
-            image[:, :, 2] = contrast_stretch(image[:, :, 2])
-            image = hsv2rgb(image)
-        elif image.shape[2] == 1:
-            image = contrast_stretch(image)
-        else:
-            raise ValueError(
-                "Was expecting a 1-channel (greyscale) or 3-channel (colour) image.  Found {} channels"
-                .format(image.shape[2]))
-
-        return transformed_image, transformed_mask
+        return image, mask
 
 
 # class BatchDatasetAugmenter(AugmentedDataset):

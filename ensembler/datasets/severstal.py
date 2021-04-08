@@ -8,7 +8,7 @@ from ensembler.datasets.helpers import split_dataset, sample_dataset
 import glob
 
 image_height = 256
-image_width = 1600
+image_width = 256
 num_classes = 5
 # loss_weights = [1.063732, 697.93036, 3272.005379, 20.793984, 99.165978]
 loss_weights = [1., 1., 1., 1., 1.]
@@ -50,7 +50,7 @@ class SeverstalDataset(Dataset):
                 trainval_images)]
             test_df = dataset_df[dataset_df["sample"].isin(test_images)]
 
-            trainval_df = sample_dataset(trainval_df)
+            #trainval_df = sample_dataset(trainval_df)
             val_df, train_df = split_dataset(trainval_df, val_percent)
 
             val_images = val_df["sample"].tolist()

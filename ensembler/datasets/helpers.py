@@ -83,6 +83,8 @@ def split_dataset(dataframe, percent, seed=42):
             first_idx + second_idx, len(available_samples)))
 
     assert len(available_samples) == 0
+    first_samples = first_samples.dropna()
+    second_samples = second_samples.dropna()
     return first_samples, second_samples
 
 
