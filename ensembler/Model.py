@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import os
 from matplotlib import pyplot as plt
-from ensembler.losses import FocalLoss
+from ensembler.losses import FocalLoss, SoftBCELoss
 from ensembler.utils import crop_image_only_outside
 
 
@@ -19,6 +19,7 @@ class Segmenter(pl.LightningModule):
         self.batch_size = self.hparams["batch_size"]
         self.batch_loss_multiplier = self.hparams["batch_loss_multiplier"]
         self.focal_loss_multiplier = self.hparams["focal_loss_multiplier"]
+        self.bce_loss_multiplier = self.hparams["bce_loss_multiplier"]
         self.dice_loss_multiplier = self.hparams["dice_loss_multiplier"]
         self.weight_decay = self.hparams["weight_decay"]
         self.learning_rate = self.hparams["learning_rate"]
@@ -30,7 +31,8 @@ class Segmenter(pl.LightningModule):
         self.test_data = test_data
 
         self.optimizer = self.get_optimizer()
-        self.batches_to_write = 2
+        self.train_batches_to_write = 1
+        self.val_batches_to_write = 10
         self.intensity = 255 // self.dataset.num_classes
 
         self.model = self.get_model()
@@ -44,10 +46,11 @@ class Segmenter(pl.LightningModule):
         parser.add_argument('--batch_loss_multiplier',
                             type=float,
                             default=None)
-        parser.add_argument('--focal_loss_multiplier', type=float, default=1.)
+        parser.add_argument('--focal_loss_multiplier', type=float, default=0.)
         parser.add_argument('--dice_loss_multiplier', type=float, default=1.)
-        parser.add_argument('--weight_decay', type=float, default=3e-5)
-        parser.add_argument('--l1_loss_multiplier', type=float, default=3e-5)
+        parser.add_argument('--bce_loss_multiplier', type=float, default=1.)
+        parser.add_argument('--weight_decay', type=float, default=0.)
+        parser.add_argument('--l1_loss_multiplier', type=float, default=0.)
         parser.add_argument('--learning_rate', type=float, default=1e-3)
         parser.add_argument('--min_learning_rate', type=float, default=1e-5)
 
@@ -75,24 +78,30 @@ class Segmenter(pl.LightningModule):
 
     def sample_loss(self, y_hat, y):
         focal_loss = FocalLoss("multilabel",
+                               weights=self.dataset.loss_weights,
+                               from_logits=False)(y_hat, y)
+        dice_loss = smp.losses.DiceLoss(
+            "multilabel",
+            from_logits=False,
+            classes=range(1, self.dataset.num_classes))(y_hat, y)
+        bce_loss = SoftBCELoss(from_logits=False,
                                weights=self.dataset.loss_weights)(y_hat, y)
-        dice_loss = smp.losses.DiceLoss("multilabel",
-                                        from_logits=False,
-                                        classes=range(
-                                            1, self.dataset.num_classes), log_loss=True)(y_hat, y)
         l1_loss = self.sum_parameter_weights()
 
+        weighted_bce_loss = self.bce_loss_multiplier * bce_loss
         weighted_focal_loss = self.focal_loss_multiplier * focal_loss
         weighted_dice_loss = self.dice_loss_multiplier * dice_loss
         weighted_l1_loss = self.l1_loss_multiplier * l1_loss
 
         weighted_loss_values = {
+            "bce_loss": weighted_bce_loss,
             "focal_loss": weighted_focal_loss,
             "dice_loss": weighted_dice_loss,
             "l1_loss": weighted_l1_loss
         }
 
         unweighted_loss_values = {
+            "bce_loss": bce_loss,
             "focal_loss": focal_loss,
             "dice_loss": dice_loss,
             "l1_loss": l1_loss
@@ -158,7 +167,12 @@ class Segmenter(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.loss(y_hat, y)
-        self.write_predictions(x, y, y_hat, batch_idx, prefix="train")
+        self.write_predictions(x,
+                               y,
+                               y_hat,
+                               batch_idx,
+                               prefix="train",
+                               batches_to_write=self.train_batches_to_write)
 
         return loss
 
@@ -169,7 +183,12 @@ class Segmenter(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.loss(y_hat, y)
-        self.write_predictions(x, y, y_hat, batch_idx, prefix="val")
+        self.write_predictions(x,
+                               y,
+                               y_hat,
+                               batch_idx,
+                               prefix="val",
+                               batches_to_write=self.val_batches_to_write)
 
         self.log("val_loss", loss, prog_bar=True)
         return {"val_loss", loss}
@@ -211,12 +230,18 @@ class Segmenter(pl.LightningModule):
         plt.savefig(outfile)
         plt.close()
 
-    def write_predictions(self, x, y, y_hat, batch_idx, prefix=""):
+    def write_predictions(self,
+                          x,
+                          y,
+                          y_hat,
+                          batch_idx,
+                          prefix="",
+                          batches_to_write=1):
         x = x.clone().detach().cpu().numpy()
         y = y.clone().detach().cpu().numpy()
         y_hat = y_hat.clone().detach().cpu().numpy()
 
-        if batch_idx >= self.batches_to_write:
+        if batch_idx >= batches_to_write:
             return
 
         try:

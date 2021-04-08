@@ -4,6 +4,8 @@ from typing import Optional
 from functools import partial
 import torch.nn.functional as F
 
+__all__ = ["FocalLoss"]
+
 
 def focal_loss(output: torch.Tensor,
                target: torch.Tensor,
@@ -13,7 +15,8 @@ def focal_loss(output: torch.Tensor,
                normalized: bool = False,
                reduced_threshold: Optional[float] = None,
                eps: float = 1e-6,
-               weights=None) -> torch.Tensor:
+               weights=None,
+               from_logits=False) -> torch.Tensor:
     """Compute binary focal loss between target and output logits.
     See :class:`~pytorch_toolbelt.losses.FocalLoss` for details.
     Args:
@@ -36,7 +39,12 @@ def focal_loss(output: torch.Tensor,
     """
     target = target.type(output.type())
 
-    logpt = F.binary_cross_entropy(output, target, reduction="none")
+    if from_logits:
+        logpt = F.binary_cross_entropy_with_logits(output,
+                                                   target,
+                                                   reduction="none")
+    else:
+        logpt = F.binary_cross_entropy(output, target, reduction="none")
     pt = torch.exp(-logpt)
 
     # compute the loss
@@ -80,7 +88,8 @@ class FocalLoss(smp.losses.FocalLoss):
                  reduction: Optional[str] = "mean",
                  normalized: bool = False,
                  reduced_threshold: Optional[float] = None,
-                 weights=None):
+                 weights=None,
+                 from_logits=False):
         super().__init__(mode, alpha, gamma, ignore_index, reduction,
                          normalized, reduced_threshold)
 
@@ -90,7 +99,8 @@ class FocalLoss(smp.losses.FocalLoss):
                                      reduced_threshold=reduced_threshold,
                                      reduction=reduction,
                                      normalized=normalized,
-                                     weights=weights)
+                                     weights=weights,
+                                     from_logits=from_logits)
 
     def forward(self, y_pred: torch.Tensor,
                 y_true: torch.Tensor) -> torch.Tensor:

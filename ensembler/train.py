@@ -4,16 +4,17 @@ import os
 from ensembler.Model import Segmenter as model
 from ensembler.augments import get_augments
 from ensembler.callbacks import RecordTrainStatus
-from ensembler.datasets.AugmentedDataset import DatasetAugmenter
+from ensembler.datasets.AugmentedDataset import RepeatedDatasetAugmenter, DatasetAugmenter
 from ensembler.datasets import Datasets
+from math import ceil
 
 description = "Train a model."
 
 
 def add_argparse_args(parser):
     parser.add_argument('--patience', type=int, default=15)
-    parser.add_argument('--num_workers', type=int, default=os.cpu_count() - 1)
-    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--num_workers', type=int, default=os.cpu_count() - 1),
+    parser.add_argument('--batch_size', type=int, default=10)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
     parser.add_argument('--accumulate_grad_batches', type=int, default=1)
     parser = model.add_model_specific_args(parser)
@@ -21,7 +22,7 @@ def add_argparse_args(parser):
 
 
 def get_augmenters():
-    return DatasetAugmenter, DatasetAugmenter
+    return RepeatedDatasetAugmenter, DatasetAugmenter
 
 
 def execute(args):

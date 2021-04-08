@@ -7,8 +7,8 @@ import pandas as pd
 from ensembler.datasets.helpers import split_dataset, sample_dataset
 import json
 
-image_height = 1280
-image_width = 1536
+image_height = 256
+image_width = 256
 num_classes = 4
 loss_weights = [0., 1., 1., 1.]
 classes = {"background": 0, "gripper": 50, "wrinkle": 100, "fabric": 200}
@@ -37,7 +37,7 @@ class WrinklerDataset(Dataset):
         dataset_df = pd.read_csv(statistics_file)
         trainval_df = dataset_df[dataset_df["sample"].isin(trainval_images)]
 
-        trainval_df = sample_dataset(trainval_df)
+        # trainval_df = sample_dataset(trainval_df)
         val_df, train_df = split_dataset(trainval_df, val_percent)
 
         val_images = val_df["sample"].tolist()
@@ -104,15 +104,23 @@ def get_dataloaders(directory, augmenters, batch_size, augmentations):
     val_data = WrinklerDataset(directory, split="val")
     test_data = WrinklerDataset(directory, split="test")
 
-    train_transform, patch_transform, test_transform = augmentations
+    preprocessing_transform, train_transform, patch_transform, test_transform = augmentations
     train_augmenter, val_augmenter = augmenters
 
-    train_data = train_augmenter(train_data,
-                                 patch_transform,
-                                 augments=train_transform,
-                                 batch_size=batch_size,
-                                 shuffle=True)
-    val_data = val_augmenter(val_data, test_transform)
-    test_data = val_augmenter(test_data, test_transform)
+    train_data = train_augmenter(
+        train_data,
+        patch_transform,
+        preprocessing_transform=preprocessing_transform,
+        augments=train_transform,
+        batch_size=batch_size,
+        shuffle=True)
+    val_data = val_augmenter(val_data,
+                             test_transform,
+                             preprocessing_transform=preprocessing_transform)
+    test_data = val_augmenter(
+        test_data,
+        test_transform,
+        preprocessing_transform=preprocessing_transform,
+    )
 
     return train_data, val_data, test_data

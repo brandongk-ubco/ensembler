@@ -4,7 +4,7 @@ import os
 
 
 class RecordTrainStatus(pl.callbacks.Callback):
-    def on_validation_epoch_end(self, trainer, pl_module):
+    def _write_train_status(self, trainer, pl_module):
         state = {
             "Trainer": {
                 "state": trainer.state.value,
@@ -27,6 +27,12 @@ class RecordTrainStatus(pl.callbacks.Callback):
         with open(os.path.join(trainer.logger.log_dir, "trainer.json"),
                   "w") as statefile:
             json.dump(state, statefile, indent=4)
+
+    def on_train_end(self, trainer, pl_module):
+        self._write_train_status(trainer, pl_module)
+
+    def on_epoch_end(self, trainer, pl_module):
+        self._write_train_status(trainer, pl_module)
 
 
 # class ModelSummary(pl.callbacks.Callback):
