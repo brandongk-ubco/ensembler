@@ -47,20 +47,20 @@ class Segmenter(pl.LightningModule):
                             type=float,
                             default=None)
         parser.add_argument('--focal_loss_multiplier', type=float, default=0.)
-        parser.add_argument('--dice_loss_multiplier', type=float, default=1.)
+        parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
         parser.add_argument('--bce_loss_multiplier', type=float, default=1.)
-        parser.add_argument('--weight_decay', type=float, default=0.)
-        parser.add_argument('--l1_loss_multiplier', type=float, default=0.)
+        parser.add_argument('--weight_decay', type=float, default=3e-5.)
+        parser.add_argument('--l1_loss_multiplier', type=float, default=3e-5.)
         parser.add_argument('--learning_rate', type=float, default=1e-3)
         parser.add_argument('--min_learning_rate', type=float, default=1e-5)
 
     def get_model(self):
-        model = smp.Unet(encoder_name=self.encoder_name,
+        model = smp.UNet(encoder_name=self.encoder_name,
                          encoder_weights=None,
                          encoder_depth=self.depth,
                          in_channels=self.dataset.num_channels,
                          classes=self.dataset.num_classes,
-                         activation='softmax2d')
+                         activation="softmax2d")
         model.apply(self.initialize_weights)
         return model
 
@@ -77,15 +77,22 @@ class Segmenter(pl.LightningModule):
             torch.nn.init.constant_(m.bias.data, 0)
 
     def sample_loss(self, y_hat, y):
+        #pos_weight = torch.Tensor(self.dataset.loss_weights).type_as(y_hat)
+
         focal_loss = FocalLoss("multilabel",
                                weights=self.dataset.loss_weights,
                                from_logits=False)(y_hat, y)
+
         dice_loss = smp.losses.DiceLoss(
             "multilabel",
             from_logits=False,
             classes=range(1, self.dataset.num_classes))(y_hat, y)
+
+        #bce_loss = SoftBCELoss(pos_weight=pos_weight)(y_hat.transpose(1,3), y.transpose(1,3))
+
         bce_loss = SoftBCELoss(from_logits=False,
                                weights=self.dataset.loss_weights)(y_hat, y)
+
         l1_loss = self.sum_parameter_weights()
 
         weighted_bce_loss = self.bce_loss_multiplier * bce_loss
