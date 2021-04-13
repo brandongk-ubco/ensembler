@@ -3,10 +3,7 @@ import torch
 import numpy as np
 import torchvision
 
-image_height = 1024
-image_width = 2048
 num_classes = 20
-batch_size = 3
 
 mapping_20 = {
     0: 0,
@@ -45,6 +42,8 @@ mapping_20 = {
     33: 19,
     -1: 0
 }
+loss_weights = [1.] * num_classes
+loss_weights[0] = 0.
 
 cityscapes_folder = "/mnt/d/work/datasets/cityscapes"
 

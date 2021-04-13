@@ -24,7 +24,6 @@ class Segmenter(pl.LightningModule):
         self.weight_decay = self.hparams["weight_decay"]
         self.learning_rate = self.hparams["learning_rate"]
         self.min_learning_rate = self.hparams["min_learning_rate"]
-        self.l1_loss_multiplier = self.hparams["l1_loss_multiplier"]
         self.dataset = dataset
         self.val_data = val_data
         self.train_data = train_data
@@ -40,7 +39,7 @@ class Segmenter(pl.LightningModule):
     def add_model_specific_args(parser):
         parser.add_argument('--encoder_name',
                             type=str,
-                            default="efficientnet-b7")
+                            default="efficientnet-b3")
         parser.add_argument('--depth', type=int, default=5)
         parser.add_argument('--batch_loss_multiplier',
                             type=float,
@@ -60,7 +59,8 @@ class Segmenter(pl.LightningModule):
                          classes=self.dataset.num_classes,
                          activation="softmax2d")
         model = torch.nn.Sequential(
-            torch.nn.Conv2d(self.dataset.num_channels, 3, (1, 1)), 3, model)
+            torch.nn.Conv2d(self.dataset.num_channels, 3, (1, 1)),
+            torch.nn.BatchNorm2d(self.dataset.num_channels), model)
         return model
 
     def sample_loss(self, y_hat, y):

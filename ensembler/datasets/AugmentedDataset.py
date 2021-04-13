@@ -125,7 +125,7 @@ class RepeatedDatasetAugmenter(AugmentedDataset):
                  augments=None,
                  preprocessing_transform=None,
                  shuffle=False,
-                 repeats=4,
+                 repeats=1,
                  **kwargs):
         super().__init__(dataset, preprocessing_transform, patch_transform,
                          augments)

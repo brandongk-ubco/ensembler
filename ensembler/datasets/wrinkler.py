@@ -7,8 +7,6 @@ import glob
 from ensembler.datasets.helpers import process_split
 import json
 
-image_height = 512
-image_width = 512
 num_classes = 4
 loss_weights = [0., 1., 1., 1.]
 classes = {"background": 0, "gripper": 50, "wrinkle": 100, "fabric": 200}
