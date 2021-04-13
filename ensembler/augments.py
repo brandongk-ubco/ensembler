@@ -3,11 +3,12 @@ import albumentations as A
 
 def get_augments(image_height, image_width):
 
-    preprocessing_transform = A.Compose([
-        A.FromFloat(dtype='uint8', always_apply=True),
-        A.Equalize(p=1.0, by_channels=False),
-        A.ToFloat(always_apply=True),
-    ])
+    # preprocessing_transform = A.Compose([
+    #    A.FromFloat(dtype='uint8', always_apply=True),
+    #    A.Equalize(p=1.0, by_channels=False),
+    #    A.ToFloat(always_apply=True),
+    # ])
+    preprocessing_transform = None
 
     patch_transform = A.Compose([
         A.PadIfNeeded(min_height=image_height,
