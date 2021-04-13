@@ -30,7 +30,6 @@ class Segmenter(pl.LightningModule):
         self.train_data = train_data
         self.test_data = test_data
 
-        self.optimizer = self.get_optimizer()
         self.train_batches_to_write = 1
         self.val_batches_to_write = 10
         self.intensity = 255 // self.dataset.num_classes
@@ -49,35 +48,22 @@ class Segmenter(pl.LightningModule):
         parser.add_argument('--focal_loss_multiplier', type=float, default=0.)
         parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
         parser.add_argument('--bce_loss_multiplier', type=float, default=1.)
-        parser.add_argument('--weight_decay', type=float, default=3e-5.)
-        parser.add_argument('--l1_loss_multiplier', type=float, default=3e-5.)
+        parser.add_argument('--weight_decay', type=float, default=3e-5)
         parser.add_argument('--learning_rate', type=float, default=1e-3)
-        parser.add_argument('--min_learning_rate', type=float, default=1e-5)
+        parser.add_argument('--min_learning_rate', type=float, default=1e-7)
 
     def get_model(self):
         model = smp.Unet(encoder_name=self.encoder_name,
                          encoder_weights="imagenet",
                          encoder_depth=self.depth,
-                         in_channels=self.dataset.num_channels,
+                         in_channels=3,
                          classes=self.dataset.num_classes,
-                         activation='softmax2d')
-        # model.apply(self.initialize_weights)
+                         activation="softmax2d")
+        model = torch.nn.Sequential(
+            torch.nn.Conv2d(self.dataset.num_channels, 3, (1, 1)), 3, model)
         return model
 
-    def initialize_weights(self, m):
-        if isinstance(m, torch.nn.Conv2d):
-            torch.nn.init.kaiming_normal_(m.weight.data)
-            if m.bias is not None:
-                torch.nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, torch.nn.BatchNorm2d):
-            torch.nn.init.constant_(m.weight.data, 1)
-            torch.nn.init.constant_(m.bias.data, 0)
-        elif isinstance(m, torch.nn.Linear):
-            torch.nn.init.kaiming_uniform_(m.weight.data)
-            torch.nn.init.constant_(m.bias.data, 0)
-
     def sample_loss(self, y_hat, y):
-        #pos_weight = torch.Tensor(self.dataset.loss_weights).type_as(y_hat)
 
         focal_loss = FocalLoss("multilabel",
                                weights=self.dataset.loss_weights,
@@ -88,30 +74,23 @@ class Segmenter(pl.LightningModule):
             from_logits=False,
             classes=range(1, self.dataset.num_classes))(y_hat, y)
 
-        #bce_loss = SoftBCELoss(pos_weight=pos_weight)(y_hat.transpose(1,3), y.transpose(1,3))
-
         bce_loss = SoftBCELoss(from_logits=False,
                                weights=self.dataset.loss_weights)(y_hat, y)
-
-        l1_loss = self.sum_parameter_weights()
 
         weighted_bce_loss = self.bce_loss_multiplier * bce_loss
         weighted_focal_loss = self.focal_loss_multiplier * focal_loss
         weighted_dice_loss = self.dice_loss_multiplier * dice_loss
-        weighted_l1_loss = self.l1_loss_multiplier * l1_loss
 
         weighted_loss_values = {
             "bce_loss": weighted_bce_loss,
             "focal_loss": weighted_focal_loss,
-            "dice_loss": weighted_dice_loss,
-            "l1_loss": weighted_l1_loss
+            "dice_loss": weighted_dice_loss
         }
 
         unweighted_loss_values = {
             "bce_loss": bce_loss,
             "focal_loss": focal_loss,
-            "dice_loss": dice_loss,
-            "l1_loss": l1_loss
+            "dice_loss": dice_loss
         }
 
         return weighted_loss_values, unweighted_loss_values
@@ -129,25 +108,6 @@ class Segmenter(pl.LightningModule):
         loss = torch.stack(list(weighted_loss_values.values())).sum()
 
         return loss
-
-    def sum_parameter_weights(self, normalize=True):
-        sum_val = torch.stack([
-            torch.sum(torch.abs(param))
-            for name, param in self.named_parameters()
-            if param.requires_grad and "conv" in name
-        ]).sum(dim=0)
-
-        if normalize:
-            count_val = torch.IntTensor([
-                torch.numel(param) for name, param in self.named_parameters()
-                if param.requires_grad and "conv" in name
-            ]).sum(dim=0)
-            sum_val = sum_val / count_val
-
-        return sum_val
-
-    def get_optimizer(self):
-        return torch.optim.Adam
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_data,
@@ -201,9 +161,10 @@ class Segmenter(pl.LightningModule):
         return {"val_loss", loss}
 
     def configure_optimizers(self):
-        optimizer = self.optimizer(self.parameters(),
-                                   lr=self.learning_rate,
-                                   weight_decay=self.weight_decay)
+        optimizer = torch.optim.SGD(self.parameters(),
+                                    lr=self.learning_rate,
+                                    weight_decay=self.weight_decay,
+                                    momentum=0.9)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             patience=self.patience,
@@ -258,7 +219,7 @@ class Segmenter(pl.LightningModule):
 
         for i in range(y_hat.shape[0]):
             img = x[i, :, :, :]
-            img = img - np.min(img)
+            #img = img - np.min(img)
             img = img.transpose(1, 2, 0)
 
             mask = y[i, :, :, :]

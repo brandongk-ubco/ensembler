@@ -50,7 +50,7 @@ class AugmentedDataset:
             mask = transformed["mask"]
 
         image = np.clip(image, 0., 1.)
-        image = image - np.mean(image)
+        #image = image - np.mean(image)
 
         return image, mask
 
@@ -125,7 +125,7 @@ class RepeatedDatasetAugmenter(AugmentedDataset):
                  augments=None,
                  preprocessing_transform=None,
                  shuffle=False,
-                 repeats=1,
+                 repeats=4,
                  **kwargs):
         super().__init__(dataset, preprocessing_transform, patch_transform,
                          augments)
