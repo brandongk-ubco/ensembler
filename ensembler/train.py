@@ -11,7 +11,7 @@ description = "Train a model."
 
 
 def add_argparse_args(parser):
-    parser.add_argument('--patience', type=int, default=15)
+    parser.add_argument('--patience', type=int, default=20)
     parser.add_argument('--num_workers', type=int, default=os.cpu_count() - 1),
     parser.add_argument('--batch_size', type=int, default=10)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
