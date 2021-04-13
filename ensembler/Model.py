@@ -60,7 +60,7 @@ class Segmenter(pl.LightningModule):
                          activation="softmax2d")
         model = torch.nn.Sequential(
             torch.nn.Conv2d(self.dataset.num_channels, 3, (1, 1)),
-            torch.nn.BatchNorm2d(self.dataset.num_channels), model)
+            torch.nn.BatchNorm2d(3), model)
         return model
 
     def sample_loss(self, y_hat, y):

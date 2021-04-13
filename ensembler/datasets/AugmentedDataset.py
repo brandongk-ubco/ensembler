@@ -1,9 +1,8 @@
 import numpy as np
 import torch
-from skimage import exposure
-from skimage.util import dtype_limits
 import random
 from ensembler.utils import crop_image_only_outside
+from math import ceil
 
 
 class AugmentedDataset:
@@ -125,7 +124,7 @@ class RepeatedDatasetAugmenter(AugmentedDataset):
                  augments=None,
                  preprocessing_transform=None,
                  shuffle=False,
-                 repeats=1,
+                 min_train_samples=200,
                  **kwargs):
         super().__init__(dataset, preprocessing_transform, patch_transform,
                          augments)
@@ -133,7 +132,9 @@ class RepeatedDatasetAugmenter(AugmentedDataset):
         self.data_map = list(range(num_elements))
         self.shuffle = shuffle
         self.augments = augments
-        self.repeats = repeats
+        self.repeats = 1
+        if num_elements < min_train_samples:
+            self.repeats = ceil(min_train_samples / num_elements)
 
     def __len__(self):
         return len(self.dataset) * self.repeats

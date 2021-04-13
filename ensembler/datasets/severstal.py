@@ -1,10 +1,10 @@
 import torch
 from torch.utils.data import Dataset
 import os
-import json
 import numpy as np
-from ensembler.datasets.helpers import process_split
 import glob
+from ensembler.datasets._base import base_get_dataloaders, base_get_all_dataloader
+from functools import partial
 
 num_classes = 5
 loss_weights = [0., 1., 1., 1., 1.]
@@ -78,53 +78,5 @@ class SeverstalDataset(Dataset):
         return (image, mask)
 
 
-def get_all_dataloader(directory):
-    return SeverstalDataset(directory, split="all")
-
-
-def get_dataloaders(directory, augmenters, batch_size, augmentations):
-
-    with open(os.path.join(directory, "split.json"), "r") as splitjson:
-        sample_split = json.load(splitjson)
-
-    statistics_file = os.path.join(directory, "class_samples.csv")
-
-    train_images, val_images, test_images = process_split(
-        sample_split, statistics_file)
-
-    train_data = SeverstalDataset(directory,
-                                  train_images,
-                                  val_images,
-                                  test_images,
-                                  split="train")
-    val_data = SeverstalDataset(directory,
-                                train_images,
-                                val_images,
-                                test_images,
-                                split="val")
-    test_data = SeverstalDataset(directory,
-                                 train_images,
-                                 val_images,
-                                 test_images,
-                                 split="test")
-
-    preprocessing_transform, train_transform, patch_transform, test_transform = augmentations
-    train_augmenter, val_augmenter = augmenters
-
-    train_data = train_augmenter(
-        train_data,
-        patch_transform,
-        preprocessing_transform=preprocessing_transform,
-        augments=train_transform,
-        batch_size=batch_size,
-        shuffle=True)
-    val_data = val_augmenter(val_data,
-                             test_transform,
-                             preprocessing_transform=preprocessing_transform)
-    test_data = val_augmenter(
-        test_data,
-        test_transform,
-        preprocessing_transform=preprocessing_transform,
-    )
-
-    return train_data, val_data, test_data
+get_dataloaders = partial(base_get_dataloaders, Dataset=SeverstalDataset)
+get_all_dataloader = partial(base_get_all_dataloader, Dataset=SeverstalDataset)
