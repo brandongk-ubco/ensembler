@@ -6,7 +6,6 @@ from ensembler.augments import get_augments
 from ensembler.callbacks import RecordTrainStatus
 from ensembler.datasets.AugmentedDataset import RepeatedDatasetAugmenter, DatasetAugmenter
 from ensembler.datasets import Datasets
-from math import ceil
 
 description = "Train a model."
 

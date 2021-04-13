@@ -56,12 +56,12 @@ class Segmenter(pl.LightningModule):
 
     def get_model(self):
         model = smp.Unet(encoder_name=self.encoder_name,
-                         encoder_weights=None,
+                         encoder_weights="imagenet",
                          encoder_depth=self.depth,
                          in_channels=self.dataset.num_channels,
                          classes=self.dataset.num_classes,
                          activation='softmax2d')
-        model.apply(self.initialize_weights)
+        # model.apply(self.initialize_weights)
         return model
 
     def initialize_weights(self, m):
