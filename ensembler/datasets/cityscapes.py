@@ -1,50 +1,7 @@
-from .AugmentedDataset import AugmentedDataset
-import torch
-import numpy as np
-import torchvision
 from ensembler.datasets._base import base_get_dataloaders, base_get_all_dataloader
+from ensembler.datasets.CompressedNpzDataset import CompressedNpzDataset
 from functools import partial
-import random
-from PIL import Image
-import os
-
-mapping_20 = {
-    0: 0,
-    1: 0,
-    2: 0,
-    3: 0,
-    4: 0,
-    5: 0,
-    6: 0,
-    7: 1,
-    8: 2,
-    9: 0,
-    10: 0,
-    11: 3,
-    12: 4,
-    13: 5,
-    14: 0,
-    15: 0,
-    16: 0,
-    17: 6,
-    18: 0,
-    19: 7,
-    20: 8,
-    21: 9,
-    22: 10,
-    23: 11,
-    24: 12,
-    25: 13,
-    26: 14,
-    27: 15,
-    28: 16,
-    29: 0,
-    30: 0,
-    31: 17,
-    32: 18,
-    33: 19,
-    -1: 0
-}
+import torch
 
 classes = [
     "background", "road", "sidewalk", "building", "wall", "fence", "pole",
@@ -55,105 +12,18 @@ classes = [
 num_classes = len(classes)
 loss_weights = [1.] * num_classes
 loss_weights[0] = 0.
+num_channels = 3
 
 
-class CityscapesDataset(AugmentedDataset):
-    def __init__(self,
-                 cityscapes_folder,
-                 train_images=None,
-                 val_images=None,
-                 test_images=None,
-                 split="train"):
-
-        self.cityscapes_folder = cityscapes_folder
-
-        self.split = split
-        self.targets_dir = os.path.join(cityscapes_folder, "gtFine")
-
-        if self.split == "all":
-            train_data = torchvision.datasets.Cityscapes(
-                self.cityscapes_folder,
-                split='train',
-                mode='fine',
-                target_type='semantic')
-
-            val_data = torchvision.datasets.Cityscapes(self.cityscapes_folder,
-                                                       split='val',
-                                                       mode='fine',
-                                                       target_type='semantic')
-
-            test_data = torchvision.datasets.Cityscapes(self.cityscapes_folder,
-                                                        split='test',
-                                                        mode='fine',
-                                                        target_type='semantic')
-
-            sep = os.path.sep
-            all_images = train_data.images + val_data.images + test_data.images
-            all_images = [sep.join(i.split(sep)[-3:]) for i in all_images]
-
-            all_masks = [
-                os.path.join(
-                    "gtFine", '{}_gtFine_labelIds.png'.format(
-                        file_name.split('_leftImg8bit')[0]))
-                for file_name in all_images
-            ]
-
-            all_images = [os.path.join("leftImg8bit", i) for i in all_images]
-
-            self.samples = [i for i in zip(all_images, all_masks)]
-        else:
-            assert train_images is not None
-            assert val_images is not None
-            assert test_images is not None
-            if split == "train":
-                sample_from = train_images
-            elif split == "val":
-                sample_from = val_images
-            elif split == "test":
-                sample_from = test_images
-            else:
-                raise ValueError("Incorrect split {}".format(split))
-
-            self.samples = [
-                i for i in self.samples
-                if os.path.splitext(os.path.basename(i[0]))[0] in sample_from
-            ]
-
-            r = random.Random()
-            r.seed(42)
-            r.shuffle(self.samples)
-
-    def get_image_names(self):
-        return [
-            os.path.splitext(os.path.basename(i))[0].replace(
-                "_leftImg8bit", "") for i, m in self.samples
-        ]
-
-    def __len__(self):
-        return len(self.samples)
-
+class CityscapesDataset(CompressedNpzDataset):
     def __getitem__(self, idx):
-        image_name, mask_name = self.samples[idx]
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
 
-        image = Image.open(os.path.join(self.cityscapes_folder,
-                                        image_name)).convert('RGB')
-        mask = Image.open(os.path.join(self.cityscapes_folder, mask_name))
-
-        image = np.array(image)
-        mask = np.array(mask)
-
-        label_mask = np.zeros((num_classes, mask.shape[0], mask.shape[1]),
-                              dtype=image.dtype)
-
-        for k, v in mapping_20.items():
-            label_mask[v, mask == k] = 1
-
-        image = image.astype("float32").swapaxes(0, 2).swapaxes(1, 2) / 255.
-
-        label_mask = torch.Tensor(label_mask)
-        image = torch.Tensor(image)
-
-        return image, label_mask
+        image_name, image, mask = super().load_image(self.images[idx])
+        image = image.transpose(1, 2, 0)
+        mask = mask.transpose(1, 2, 0)
+        return (image, mask)
 
 
 get_dataloaders = partial(base_get_dataloaders, Dataset=CityscapesDataset)

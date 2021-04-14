@@ -105,7 +105,8 @@ class CityscapesDatasetInitializer:
         for k, v in mapping_20.items():
             label_mask[v, mask == k] = 1
 
-        image = image.astype("float32").swapaxes(0, 2).swapaxes(1, 2) / 255.
+        image = image.astype("float32") / 255.
+        mask = mask.transpose(1, 2, 0)
 
         label_mask = torch.Tensor(label_mask)
         image = torch.Tensor(image)

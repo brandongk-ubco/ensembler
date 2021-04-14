@@ -14,9 +14,7 @@ def get_augments(image_height, image_width):
         A.PadIfNeeded(min_height=image_height,
                       min_width=image_width,
                       always_apply=True),
-        A.CropNonEmptyMaskIfExists(height=image_height,
-                                   width=image_width,
-                                   always_apply=True)
+        A.RandomCrop(height=image_height, width=image_width, always_apply=True)
     ])
 
     train_transform = A.Compose([

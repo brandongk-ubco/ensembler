@@ -13,11 +13,11 @@ description = "Train a model."
 def add_argparse_args(parser):
     parser.add_argument('--patience', type=int, default=20)
     parser.add_argument('--num_workers', type=int, default=os.cpu_count() - 1),
-    parser.add_argument('--batch_size', type=int, default=10)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
     parser.add_argument('--accumulate_grad_batches', type=int, default=4)
-    parser.add_argument('--patch_height', type=int, default=256)
-    parser.add_argument('--patch_width', type=int, default=256)
+    parser.add_argument('--patch_height', type=int, default=512)
+    parser.add_argument('--patch_width', type=int, default=512)
     parser = model.add_model_specific_args(parser)
     return parser
 
