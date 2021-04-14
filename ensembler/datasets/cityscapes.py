@@ -16,14 +16,7 @@ num_channels = 3
 
 
 class CityscapesDataset(CompressedNpzDataset):
-    def __getitem__(self, idx):
-        if torch.is_tensor(idx):
-            idx = idx.tolist()
-
-        image_name, image, mask = super().load_image(self.images[idx])
-        image = image.transpose(1, 2, 0)
-        mask = mask.transpose(1, 2, 0)
-        return (image, mask)
+    pass
 
 
 get_dataloaders = partial(base_get_dataloaders, Dataset=CityscapesDataset)
