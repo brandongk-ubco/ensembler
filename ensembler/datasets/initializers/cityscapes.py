@@ -60,13 +60,10 @@ class CityscapesDatasetInitializer:
                                                    mode='fine',
                                                    target_type='semantic')
 
-        test_data = torchvision.datasets.Cityscapes(self.cityscapes_folder,
-                                                    split='test',
-                                                    mode='fine',
-                                                    target_type='semantic')
+        # Exclude Test Data as it's not labelled!
 
         sep = os.path.sep
-        all_images = train_data.images + val_data.images + test_data.images
+        all_images = train_data.images + val_data.images
         all_images = [sep.join(i.split(sep)[-3:]) for i in all_images]
 
         all_masks = [
@@ -106,7 +103,7 @@ class CityscapesDatasetInitializer:
             label_mask[v, mask == k] = 1
 
         image = image.astype("float32") / 255.
-        mask = mask.transpose(1, 2, 0)
+        label_mask = label_mask.transpose(1, 2, 0)
 
         label_mask = torch.Tensor(label_mask)
         image = torch.Tensor(image)

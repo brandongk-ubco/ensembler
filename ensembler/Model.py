@@ -47,7 +47,7 @@ class Segmenter(pl.LightningModule):
         parser.add_argument('--focal_loss_multiplier', type=float, default=0.)
         parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
         parser.add_argument('--bce_loss_multiplier', type=float, default=1.)
-        parser.add_argument('--weight_decay', type=float, default=3e-5)
+        parser.add_argument('--weight_decay', type=float, default=0)
         parser.add_argument('--learning_rate', type=float, default=1e-3)
         parser.add_argument('--min_learning_rate', type=float, default=1e-7)
 
@@ -161,10 +161,9 @@ class Segmenter(pl.LightningModule):
         return {"val_loss", loss}
 
     def configure_optimizers(self):
-        optimizer = torch.optim.SGD(self.parameters(),
-                                    lr=self.learning_rate,
-                                    weight_decay=self.weight_decay,
-                                    momentum=0.9)
+        optimizer = torch.optim.Adam(self.parameters(),
+                                     lr=self.learning_rate,
+                                     weight_decay=self.weight_decay)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             patience=self.patience,

@@ -49,72 +49,8 @@ class AugmentedDataset:
             mask = transformed["mask"]
 
         image = np.clip(image, 0., 1.)
-        #image = image - np.mean(image)
 
         return image, mask
-
-
-# class BatchDatasetAugmenter(AugmentedDataset):
-
-#     lastItem = None
-
-#     def __init__(self,
-#                  dataset,
-#                  patch_transform,
-#                  batch_size,
-#                  augments=None,
-#                  shuffle=False):
-#         super().__init__(dataset, patch_transform)
-#         num_elements = len(self.dataset)
-#         self.data_map = list(range(num_elements))
-#         self.shuffle = shuffle
-#         self.batch_size = batch_size
-#         self.augments = augments
-
-#     def __len__(self):
-#         return len(self.dataset) * self.batch_size
-
-#     def __getitem__(self, idx):
-#         if idx == 0 and self.shuffle:
-#             random.shuffle(self.data_map)
-
-#         dataset_idx = idx // self.batch_size
-#         flip_idx = idx % self.batch_size
-
-#         if flip_idx == 0:
-#             self.lastItem = super().__getitem__(self.data_map[dataset_idx])
-
-#         image, mask = self.lastItem
-
-#         if flip_idx == 0:
-#             pass
-#         elif flip_idx == 1:
-#             image = np.flip(image, [0])
-#             mask = np.flip(mask, [0])
-#         elif flip_idx == 2:
-#             image = np.flip(image, [1])
-#             mask = np.flip(mask, [1])
-#         elif flip_idx == 3:
-#             image = np.flip(image, [0, 1])
-#             mask = np.flip(mask, [0, 1])
-#         elif self.augments is not None:
-#             transformed = self.augments(image=image, mask=mask)
-#             image = transformed["image"]
-#             mask = transformed["mask"]
-#         else:
-#             raise ValueError(
-#                 "Batch Size too large, must supply augments to generate additional samples"
-#             )
-
-#         image -= np.min(image)
-#         image /= np.max(image)
-#         image = np.clip(image, 0., 1.)
-#         image = image - np.mean(image)
-
-#         image = image.transpose(2, 0, 1)
-#         mask = mask.transpose(2, 0, 1)
-
-#         return torch.from_numpy(image.copy()), torch.from_numpy(mask.copy())
 
 
 class RepeatedDatasetAugmenter(AugmentedDataset):
