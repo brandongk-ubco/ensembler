@@ -45,10 +45,10 @@ class Segmenter(pl.LightningModule):
                             type=float,
                             default=None)
         parser.add_argument('--focal_loss_multiplier', type=float, default=0.)
-        parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
+        parser.add_argument('--dice_loss_multiplier', type=float, default=1.)
         parser.add_argument('--bce_loss_multiplier', type=float, default=1.)
         parser.add_argument('--weight_decay', type=float, default=0)
-        parser.add_argument('--learning_rate', type=float, default=1e-3)
+        parser.add_argument('--learning_rate', type=float, default=1e-4)
         parser.add_argument('--min_learning_rate', type=float, default=1e-7)
 
     def get_model(self):
@@ -156,6 +156,9 @@ class Segmenter(pl.LightningModule):
                                batch_idx,
                                prefix="val",
                                batches_to_write=self.val_batches_to_write)
+
+        iou = smp.utils.metrics.IoU(threshold=0.5)(y_hat, y)
+        self.log("val_iou", iou, prog_bar=True)
 
         self.log("val_loss", loss, prog_bar=True)
         return {"val_loss", loss}
