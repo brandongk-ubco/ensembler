@@ -3,6 +3,7 @@ import torch
 import random
 from ensembler.utils import crop_image_only_outside
 from math import ceil
+from functools import lru_cache
 
 
 class AugmentedDataset:
@@ -73,21 +74,44 @@ class RepeatedDatasetAugmenter(AugmentedDataset):
             self.repeats = ceil(min_train_samples / num_elements)
 
     def __len__(self):
-        return len(self.dataset) * self.repeats
+        return len(self.dataset) * self.repeats * 4
+
+    @lru_cache(maxsize=10)
+    def get_dataset_img(self, dataset_idx):
+        return super().__getitem__(dataset_idx)
 
     def __getitem__(self, idx):
 
-        dataset_idx = idx % len(self.dataset)
+        repeat_idx = idx % (4 * len(self.dataset))
 
-        if dataset_idx == 0 and self.shuffle:
+        if repeat_idx == 0 and self.shuffle:
             random.shuffle(self.data_map)
 
-        image, mask = super().__getitem__(self.data_map[dataset_idx])
+        img_idx = repeat_idx // 4
+
+        image, mask = self.get_dataset_img(self.data_map[img_idx])
 
         image = image.transpose(2, 0, 1)
         mask = mask.transpose(2, 0, 1)
 
-        return torch.from_numpy(image), torch.from_numpy(mask)
+        flip_idx = repeat_idx % 4
+
+        image = torch.from_numpy(image)
+        mask = torch.from_numpy(mask)
+
+        if flip_idx == 1:
+            image = torch.flip(image, [1])
+            mask = torch.flip(mask, [1])
+
+        if flip_idx == 2:
+            image = torch.flip(image, [2])
+            mask = torch.flip(mask, [2])
+
+        if flip_idx == 3:
+            image = torch.flip(image, [1, 2])
+            mask = torch.flip(mask, [1, 2])
+
+        return image, mask
 
 
 class DatasetAugmenter(AugmentedDataset):
@@ -105,14 +129,36 @@ class DatasetAugmenter(AugmentedDataset):
         self.shuffle = shuffle
         self.augments = augments
 
+    @lru_cache(maxsize=10)
+    def get_dataset_img(self, dataset_idx):
+        return super().__getitem__(dataset_idx)
+
     def __getitem__(self, idx):
 
         if idx == 0 and self.shuffle:
             random.shuffle(self.data_map)
 
-        image, mask = super().__getitem__(self.data_map[idx])
+        img_idx = idx // 4
+        flip_idx = idx % 4
+
+        image, mask = self.get_dataset_img(self.data_map[img_idx])
 
         image = image.transpose(2, 0, 1)
         mask = mask.transpose(2, 0, 1)
 
-        return torch.from_numpy(image), torch.from_numpy(mask)
+        image = torch.from_numpy(image)
+        mask = torch.from_numpy(mask)
+
+        if flip_idx == 1:
+            image = torch.flip(image, [1])
+            mask = torch.flip(mask, [1])
+
+        if flip_idx == 2:
+            image = torch.flip(image, [2])
+            mask = torch.flip(mask, [2])
+
+        if flip_idx == 3:
+            image = torch.flip(image, [1, 2])
+            mask = torch.flip(mask, [1, 2])
+
+        return image, mask

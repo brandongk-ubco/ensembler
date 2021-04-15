@@ -6,6 +6,7 @@ import os
 from matplotlib import pyplot as plt
 from ensembler.losses import FocalLoss, SoftBCELoss
 from ensembler.utils import crop_image_only_outside
+from ensembler.aggregators import harmonize_batch
 
 
 class Segmenter(pl.LightningModule):
@@ -39,13 +40,11 @@ class Segmenter(pl.LightningModule):
     def add_model_specific_args(parser):
         parser.add_argument('--encoder_name',
                             type=str,
-                            default="efficientnet-b2")
+                            default="efficientnet-b3")
         parser.add_argument('--depth', type=int, default=5)
-        parser.add_argument('--batch_loss_multiplier',
-                            type=float,
-                            default=None)
+        parser.add_argument('--batch_loss_multiplier', type=float, default=1.)
         parser.add_argument('--focal_loss_multiplier', type=float, default=0.)
-        parser.add_argument('--dice_loss_multiplier', type=float, default=1.)
+        parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
         parser.add_argument('--bce_loss_multiplier', type=float, default=1.)
         parser.add_argument('--weight_decay', type=float, default=0)
         parser.add_argument('--learning_rate', type=float, default=1e-4)
@@ -63,7 +62,7 @@ class Segmenter(pl.LightningModule):
             torch.nn.BatchNorm2d(3), model)
         return model
 
-    def sample_loss(self, y_hat, y):
+    def sample_loss(self, y_hat, y, base_multiplier=1.):
 
         focal_loss = FocalLoss("multilabel",
                                weights=self.dataset.loss_weights,
@@ -77,9 +76,9 @@ class Segmenter(pl.LightningModule):
         bce_loss = SoftBCELoss(from_logits=False,
                                weights=self.dataset.loss_weights)(y_hat, y)
 
-        weighted_bce_loss = self.bce_loss_multiplier * bce_loss
-        weighted_focal_loss = self.focal_loss_multiplier * focal_loss
-        weighted_dice_loss = self.dice_loss_multiplier * dice_loss
+        weighted_bce_loss = base_multiplier * self.bce_loss_multiplier * bce_loss
+        weighted_focal_loss = base_multiplier * self.focal_loss_multiplier * focal_loss
+        weighted_dice_loss = base_multiplier * self.dice_loss_multiplier * dice_loss
 
         weighted_loss_values = {
             "bce_loss": weighted_bce_loss,
@@ -95,19 +94,50 @@ class Segmenter(pl.LightningModule):
 
         return weighted_loss_values, unweighted_loss_values
 
-    def loss(self, y_hat, y):
-        weighted_loss_values, unweighted_loss_values = self.sample_loss(
-            y_hat.clone(), y.clone())
+    def loss(self, y_hat, y, validation=False):
+        batch_loss = 0.
 
-        for k, v in unweighted_loss_values.items():
-            self.log("unweighted_{}".format(k), v)
+        if self.batch_loss_multiplier > 0:
+            assert y_hat.shape[0] % 4 == 0
 
-        for k, v in weighted_loss_values.items():
-            self.log(k, v, prog_bar=True)
+            num_images = y_hat.shape[0] // 4
 
-        loss = torch.stack(list(weighted_loss_values.values())).sum()
+            for batch, idx in enumerate(range(0, num_images, 4)):
+                y_hat_batch = y_hat[idx:idx + 4, :, :, :]
+                y_batch = y[idx:idx + 4, :, :, :]
 
-        return loss
+                y_hat_batch, y_batch = harmonize_batch(y_hat_batch, y_batch)
+
+                weighted_batch_loss_values, unweighted_batch_loss_values = self.sample_loss(
+                    y_hat_batch,
+                    y_batch,
+                    base_multiplier=self.batch_loss_multiplier)
+
+                for k, v in unweighted_batch_loss_values.items():
+                    self.log("unweighted_batch_{}_{}".format(batch, k), v)
+
+                for k, v in weighted_batch_loss_values.items():
+                    self.log("batch_{}_{}".format(batch, k), v)
+
+                batch_loss += torch.stack(
+                    list(weighted_batch_loss_values.values())).sum()
+
+            self.log("batch_loss", batch_loss, prog_bar=True)
+
+        loss = 0.
+        if not validation or self.batch_loss_multiplier == 0:
+            weighted_loss_values, unweighted_loss_values = self.sample_loss(
+                y_hat.clone(), y.clone())
+
+            for k, v in unweighted_loss_values.items():
+                self.log("unweighted_{}".format(k), v)
+
+            for k, v in weighted_loss_values.items():
+                self.log(k, v, prog_bar=True)
+
+            loss += torch.stack(list(weighted_loss_values.values())).sum()
+
+        return loss + batch_loss
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_data,
@@ -118,14 +148,14 @@ class Segmenter(pl.LightningModule):
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_data,
-                                           batch_size=1,
+                                           batch_size=4,
                                            num_workers=self.num_workers,
                                            shuffle=False,
                                            drop_last=False)
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.test_data,
-                                           batch_size=1,
+                                           batch_size=4,
                                            num_workers=self.num_workers,
                                            shuffle=False,
                                            drop_last=False)
@@ -149,7 +179,7 @@ class Segmenter(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        loss = self.loss(y_hat, y)
+        loss = self.loss(y_hat, y, validation=True)
         self.write_predictions(x,
                                y,
                                y_hat,
@@ -207,9 +237,6 @@ class Segmenter(pl.LightningModule):
                           batch_idx,
                           prefix="",
                           batches_to_write=1):
-        x = x.clone().detach().cpu().numpy()
-        y = y.clone().detach().cpu().numpy()
-        y_hat = y_hat.clone().detach().cpu().numpy()
 
         if batch_idx >= batches_to_write:
             return
@@ -219,17 +246,55 @@ class Segmenter(pl.LightningModule):
         except AttributeError:
             return
 
+        x = x.clone().detach().cpu()
+        y = y.clone().detach().cpu()
+        y_hat = y_hat.clone().detach().cpu()
+
+        if self.batch_loss_multiplier > 0:
+            assert y_hat.shape[0] % 4 == 0
+
+            num_images = y_hat.shape[0] // 4
+
+            for batch, idx in enumerate(range(0, num_images, 4)):
+                x_batch = x[idx:idx + 4, :, :, :]
+                y_hat_batch = y_hat[idx:idx + 4, :, :, :]
+                y_batch = y[idx:idx + 4, :, :, :]
+
+                x_batch = x_batch[0, :, :, :]
+                predicted_mask, mask = harmonize_batch(y_hat_batch, y_batch)
+
+                img = x_batch.numpy().transpose(1, 2, 0)
+                predicted_mask = predicted_mask.numpy().transpose(1, 2, 0)
+                mask = mask.numpy().transpose(1, 2, 0)
+
+                mask_img = np.argmax(mask, axis=2) * self.intensity
+                predicted_mask_img = np.argmax(predicted_mask,
+                                               axis=2) * self.intensity
+
+                row_start, row_end, col_start, col_end = crop_image_only_outside(
+                    img)
+
+                img = img[row_start:row_end, col_start:col_end, :]
+                mask_img = mask_img[row_start:row_end, col_start:col_end]
+                predicted_mask_img = predicted_mask_img[row_start:row_end,
+                                                        col_start:col_end]
+
+                outfile = os.path.join(self.logger.log_dir,
+                                       "{}_{}.png".format(prefix, batch_idx))
+
+                self.save_prediction(img, mask_img, predicted_mask_img,
+                                     outfile)
+
         for i in range(y_hat.shape[0]):
             img = x[i, :, :, :]
-            #img = img - np.min(img)
-            img = img.transpose(1, 2, 0)
+            img = img.numpy().transpose(1, 2, 0)
 
             mask = y[i, :, :, :]
-            mask = mask.transpose(1, 2, 0)
+            mask = mask.numpy().transpose(1, 2, 0)
             mask_img = np.argmax(mask, axis=2) * self.intensity
 
             predicted_mask = y_hat[i, :, :, :]
-            predicted_mask = predicted_mask.transpose(1, 2, 0)
+            predicted_mask = predicted_mask.numpy().transpose(1, 2, 0)
             predicted_mask_img = np.argmax(predicted_mask,
                                            axis=2) * self.intensity
 
