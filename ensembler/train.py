@@ -35,8 +35,9 @@ def execute(args):
     dict_args = vars(args)
 
     callbacks = [
-        pl.callbacks.EarlyStopping('val_loss',
-                                   patience=3 * dict_args["patience"]),
+        pl.callbacks.EarlyStopping('val_iou',
+                                   patience=3 * dict_args["patience"],
+                                   mode='max'),
         pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
         RecordTrainStatus()
     ]

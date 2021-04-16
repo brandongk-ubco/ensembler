@@ -43,7 +43,7 @@ class Segmenter(pl.LightningModule):
                             default="efficientnet-b3")
         parser.add_argument('--depth', type=int, default=5)
         parser.add_argument('--focal_loss_multiplier', type=float, default=0.)
-        parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
+        parser.add_argument('--dice_loss_multiplier', type=float, default=1.)
         parser.add_argument('--bce_loss_multiplier', type=float, default=1.)
         parser.add_argument('--weight_decay', type=float, default=0)
         parser.add_argument('--learning_rate', type=float, default=1e-4)
@@ -235,12 +235,13 @@ class Segmenter(pl.LightningModule):
             optimizer,
             patience=self.patience,
             min_lr=self.min_learning_rate,
-            verbose=True)
+            verbose=True,
+            mode='max')
 
         return {
             "optimizer": optimizer,
             "lr_scheduler": scheduler,
-            "monitor": 'val_loss'
+            "monitor": 'val_iou'
         }
 
     def save_prediction(self, img, mask_img, predicted_mask_img, outfile):
