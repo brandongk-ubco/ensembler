@@ -3,15 +3,12 @@ from torch.utils.data import Dataset
 import os
 from PIL import Image
 import numpy as np
-from datasets.AugmentedDataset import DatasetAugmenter
-import pandas as pd
-from utils import split_dataframe, sample_dataframe
-import json
+import glob
+from ensembler.datasets._base import base_get_dataloaders, base_get_all_dataloader
+from functools import partial
 
-image_height = 768
-image_width = 1024
 num_classes = 4
-loss_weights = [0.5, 1, 10, 1]
+loss_weights = [0., 1., 1., 1.]
 classes = {"background": 0, "gripper": 50, "wrinkle": 100, "fabric": 200}
 num_channels = 3
 
@@ -20,44 +17,32 @@ class WrinklerDataset(Dataset):
     """Wrinkler dataset."""
     def __init__(self,
                  wrinkler_folder,
-                 test_percent=15.,
-                 val_percent=5.,
+                 train_images=None,
+                 val_images=None,
+                 test_images=None,
                  split="train"):
         self.split = split
         self.wrinkler_folder = wrinkler_folder
 
-        with open(os.path.join(self.wrinkler_folder, "split.json"),
-                  "r") as splitjson:
-            sample_split = json.load(splitjson)
-
-        test_images = sample_split["test"]
-        trainval_images = sample_split["trainval"]
-
-        statistics_file = os.path.join(self.wrinkler_folder,
-                                       "class_samples.csv")
-        dataset_df = pd.read_csv(statistics_file)
-        trainval_df = dataset_df[dataset_df["sample"].isin(trainval_images)]
-
-        trainval_df = sample_dataframe(trainval_df)
-        val_df, train_df = split_dataframe(trainval_df, 10.)
-
-        val_images = val_df["sample"].tolist()
-        train_images = train_df["sample"].tolist()
-
-        if split == "train":
-            self.images = train_images
-        elif split == "val":
-            self.images = val_images
-        elif split == "test":
-            self.images = test_images
-        elif self.split == "all":
-            self.images = test_images + trainval_images
+        if self.split == "all":
+            file_search = os.path.join(self.wrinkler_folder, "Images", "*.png")
+            files = glob.glob(file_search)
+            self.images = [
+                os.path.splitext(os.path.basename(f))[0] for f in files
+            ]
         else:
-            raise ValueError("Split should be one of train, val, test or all")
-
-        self.images = [
-            name for name, ext in [os.path.splitext(i) for i in self.images]
-        ]
+            assert train_images is not None
+            assert val_images is not None
+            assert test_images is not None
+            if self.split == "train":
+                self.images = train_images
+            elif self.split == "val":
+                self.images = val_images
+            elif self.split == "test":
+                self.images = test_images
+            else:
+                raise ValueError(
+                    "Split should be one of train, val, test or all")
 
     def get_image_names(self):
         return self.images
@@ -95,16 +80,5 @@ class WrinklerDataset(Dataset):
         return (image, mask)
 
 
-def get_dataloaders(directory, augmentations):
-    train_transform, val_transform, test_transform = augmentations
-
-    train_data = WrinklerDataset(directory, split="train")
-    val_data = WrinklerDataset(directory, split="val")
-    test_data = WrinklerDataset(directory, split="test")
-    all_data = WrinklerDataset(directory, split="all")
-
-    train_data = DatasetAugmenter(train_data, train_transform)
-    val_data = DatasetAugmenter(val_data, val_transform)
-    test_data = DatasetAugmenter(test_data, test_transform)
-
-    return train_data, val_data, test_data, all_data
+get_dataloaders = partial(base_get_dataloaders, Dataset=WrinklerDataset)
+get_all_dataloader = partial(base_get_all_dataloader, Dataset=WrinklerDataset)

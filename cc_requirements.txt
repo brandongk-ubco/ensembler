@@ -1,0 +1,14 @@
+torch==1.7.1
+torchvision==0.8.2
+torchtext==0.6.0
+torchaudio==0.7.2
+pytorch_lightning
+opencv_python_headless
+scikit-learn
+pytest
+pytest-cov
+flake8
+scikit-image
+imgaug
+pandas
+
