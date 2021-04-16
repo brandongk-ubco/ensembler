@@ -74,6 +74,80 @@ class RepeatedDatasetAugmenter(AugmentedDataset):
             self.repeats = ceil(min_train_samples / num_elements)
 
     def __len__(self):
+        return len(self.dataset) * self.repeats
+
+    def __getitem__(self, idx):
+
+        repeat_idx = idx % len(self.dataset)
+
+        if repeat_idx == 0 and self.shuffle:
+            random.shuffle(self.data_map)
+
+        image, mask = super().__getitem__(self.data_map[idx])
+
+        image = image.transpose(2, 0, 1)
+        mask = mask.transpose(2, 0, 1)
+
+        image = torch.from_numpy(image)
+        mask = torch.from_numpy(mask)
+
+        return image, mask
+
+
+class DatasetAugmenter(AugmentedDataset):
+    def __init__(self,
+                 dataset,
+                 patch_transform,
+                 augments=None,
+                 preprocessing_transform=None,
+                 shuffle=False,
+                 **kwargs):
+        super().__init__(dataset, preprocessing_transform, patch_transform,
+                         augments)
+        num_elements = len(self.dataset)
+        self.data_map = list(range(num_elements))
+        self.shuffle = shuffle
+        self.augments = augments
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+
+        if idx == 0 and self.shuffle:
+            random.shuffle(self.data_map)
+
+        image, mask = super().__getitem__(self.data_map[idx])
+
+        image = image.transpose(2, 0, 1)
+        mask = mask.transpose(2, 0, 1)
+
+        image = torch.from_numpy(image)
+        mask = torch.from_numpy(mask)
+
+        return image, mask
+
+
+class RepeatedBatchDatasetAugmenter(AugmentedDataset):
+    def __init__(self,
+                 dataset,
+                 patch_transform,
+                 augments=None,
+                 preprocessing_transform=None,
+                 shuffle=False,
+                 min_train_samples=200,
+                 **kwargs):
+        super().__init__(dataset, preprocessing_transform, patch_transform,
+                         augments)
+        num_elements = len(self.dataset)
+        self.data_map = list(range(num_elements))
+        self.shuffle = shuffle
+        self.augments = augments
+        self.repeats = 1
+        if num_elements < min_train_samples:
+            self.repeats = ceil(min_train_samples / num_elements)
+
+    def __len__(self):
         return len(self.dataset) * self.repeats * 4
 
     @lru_cache(maxsize=10)
@@ -114,7 +188,7 @@ class RepeatedDatasetAugmenter(AugmentedDataset):
         return image, mask
 
 
-class DatasetAugmenter(AugmentedDataset):
+class BatchDatasetAugmenter(AugmentedDataset):
     def __init__(self,
                  dataset,
                  patch_transform,

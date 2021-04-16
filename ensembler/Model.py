@@ -5,7 +5,7 @@ import numpy as np
 import os
 from matplotlib import pyplot as plt
 from ensembler.losses import FocalLoss, SoftBCELoss
-from ensembler.utils import crop_image_only_outside
+from ensembler.utils import crop_image_only_outside, classwise_metric
 from ensembler.aggregators import harmonize_batch
 
 
@@ -25,13 +25,13 @@ class Segmenter(pl.LightningModule):
         self.weight_decay = self.hparams["weight_decay"]
         self.learning_rate = self.hparams["learning_rate"]
         self.min_learning_rate = self.hparams["min_learning_rate"]
+        self.train_batches_to_write = self.hparams["train_batches_to_write"]
+        self.val_batches_to_write = self.hparams["val_batches_to_write"]
         self.dataset = dataset
         self.val_data = val_data
         self.train_data = train_data
         self.test_data = test_data
 
-        self.train_batches_to_write = 1
-        self.val_batches_to_write = 10
         self.intensity = 255 // self.dataset.num_classes
 
         self.model = self.get_model()
@@ -42,13 +42,14 @@ class Segmenter(pl.LightningModule):
                             type=str,
                             default="efficientnet-b3")
         parser.add_argument('--depth', type=int, default=5)
-        parser.add_argument('--batch_loss_multiplier', type=float, default=1.)
         parser.add_argument('--focal_loss_multiplier', type=float, default=0.)
         parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
         parser.add_argument('--bce_loss_multiplier', type=float, default=1.)
         parser.add_argument('--weight_decay', type=float, default=0)
         parser.add_argument('--learning_rate', type=float, default=1e-4)
         parser.add_argument('--min_learning_rate', type=float, default=1e-7)
+        parser.add_argument('--train_batches_to_write', type=int, default=1)
+        parser.add_argument('--val_batches_to_write', type=int, default=1)
 
     def get_model(self):
         model = smp.Unet(encoder_name=self.encoder_name,
@@ -211,7 +212,16 @@ class Segmenter(pl.LightningModule):
 
         else:
             loss = self.loss(y_hat, y)
-            iou = smp.utils.metrics.IoU(threshold=0.5)(y_hat, y)
+            batch_ious = []
+            for batch_idx in range(y_hat.shape[0]):
+                iou = classwise_metric(y_hat[batch_idx, :, :, :],
+                                       y[batch_idx, :, :, :])
+                batch_ious.append(torch.Tensor(iou))
+            mean_ious = torch.stack(batch_ious).mean(dim=0)
+            for i, c in enumerate(self.dataset.classes):
+                self.log("val_iou_{}".format(c), mean_ious[i])
+
+            iou = mean_ious.mean()
 
         self.log("val_iou", iou, prog_bar=True)
         self.log("val_loss", loss, prog_bar=True)
