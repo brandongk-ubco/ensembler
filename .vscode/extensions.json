@@ -4,8 +4,6 @@
     "recommendations": [
         "ms-python.python",
         "eamodio.gitlens",
-        "onnovalkering.vscode-singularity",
-        "ms-azuretools.vscode-docker",
         "mikestead.dotenv"
     ]
 }

@@ -1,11 +1,25 @@
 from argparse import ArgumentParser
-from Model import Segmenter
-# from pytorch_lightning import Trainer
-from datasets import Datasets
+from ensembler.datasets import Datasets
+from ensembler import Tasks
+import os
 
-parser = ArgumentParser()
-parser = Segmenter.add_model_specific_args(parser)
-# parser = Trainer.add_argparse_args(parser)
-parser.add_argument('--dataset', type=str, choices=Datasets.choices())
-parser.add_argument('--dataset_split_seed', type=int, default=42)
-args = parser.parse_args()
+
+def parse_parameters():
+
+    parser = ArgumentParser()
+    parser.add_argument(dest="dataset_name",
+                        type=str,
+                        choices=Datasets.choices())
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--data_dir',
+                        type=str,
+                        nargs='?',
+                        const=os.environ.get("DATA_DIR", None),
+                        default=os.environ.get("DATA_DIR", None))
+    subparsers = parser.add_subparsers(title="task", dest="task")
+    for task_name in Tasks.choices():
+        subparser = subparsers.add_parser(task_name,
+                                          help=Tasks.description(task_name))
+        subparser = Tasks.add_argparse_args(task_name)(subparser)
+
+    return parser.parse_args()

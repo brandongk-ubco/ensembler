@@ -1,8 +1,10 @@
 from enum import Enum
-import datasets.voc as voc
-import datasets.cityscapes as cityscapes
-import datasets.wrinkler as wrinkler
-import datasets.severstal as severstal
+import ensembler.datasets.voc as voc
+import ensembler.datasets.wrinkler as wrinkler
+import ensembler.datasets.severstal as severstal
+import ensembler.datasets.cityscapes as cityscapes
+import ensembler.datasets.initializers.cityscapes as cityscapes_initializer
+from ensembler.datasets.helpers import *
 
 
 class Datasets(Enum):
@@ -30,5 +32,17 @@ class Datasets(Enum):
             return wrinkler
         if dataset == "cityscapes":
             return cityscapes
+
+        raise ValueError("Dataset {} not defined".format(dataset))
+
+    def get_initializer(dataset):
+        if dataset == "voc":
+            raise NotImplementedError
+        if dataset == "severstal":
+            raise NotImplementedError
+        if dataset == "wrinkler":
+            raise NotImplementedError
+        if dataset == "cityscapes":
+            return cityscapes_initializer
 
         raise ValueError("Dataset {} not defined".format(dataset))

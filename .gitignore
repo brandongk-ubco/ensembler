@@ -4,6 +4,8 @@ image.sif
 *.png
 local.env
 *.out
+condaenv.*
+hpc_ckpt_*.ckpt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

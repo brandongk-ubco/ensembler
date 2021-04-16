@@ -1,22 +1,18 @@
 import numpy as np
 import torch
-from skimage.color import rgb2hsv, hsv2rgb
-from skimage import exposure
-from skimage.util import dtype_limits
-
-
-def contrast_stretch(image, min_percentile=2, max_percentile=98):
-    p2, p98 = np.percentile(image, (min_percentile, max_percentile))
-    image = exposure.rescale_intensity(image, in_range=(p2, p98))
-    min_val, max_val = dtype_limits(image, clip_negative=True)
-    image = np.clip(image, min_val, max_val)
-    return image
+import random
+from ensembler.utils import crop_image_only_outside
+from math import ceil
+from functools import lru_cache
 
 
 class AugmentedDataset:
-    def __init__(self, dataset, transform):
+    def __init__(self, dataset, preprocessing_transform, patch_transform,
+                 augment_transform):
         self.dataset = dataset
-        self.transform = transform
+        self.patch_transform = patch_transform
+        self.augment_transform = augment_transform
+        self.preprocessing_transform = preprocessing_transform
 
     def __len__(self):
         return len(self.dataset)
@@ -26,46 +22,220 @@ class AugmentedDataset:
         image = np.array(image)
         mask = np.array(mask)
 
-        if image.shape[2] == 3:
-            image = rgb2hsv(image)
-            image[:, :, 2] = contrast_stretch(image[:, :, 2])
-            image = hsv2rgb(image)
-        elif image.shape[2] == 1:
-            image[:, :, 1] = contrast_stretch(image[:, :, 1])
-        else:
-            raise ValueError(
-                "Was expecting a 1-channel (greyscale) or 3-channel (colour) image.  Found {} channels"
-                .format(image.shape[2]))
+        row_start, row_end, col_start, col_end = crop_image_only_outside(
+            image, tol=0.2)
+        image = image[row_start:row_end, col_start:col_end, :]
+        mask = mask[row_start:row_end, col_start:col_end, :]
 
-        eps = np.finfo(mask.dtype).eps
+        if self.preprocessing_transform is not None:
+            transformed = self.preprocessing_transform(image=image, mask=mask)
+            image = transformed["image"]
+            mask = transformed["mask"]
 
-        coverage = mask.sum(0).sum(0)
-        coverage_percent = coverage / coverage.sum()
-        coverage_percent = np.clip(coverage_percent, a_min=eps, a_max=1.)
-        min_transformed_coverage = 0.
+        if self.patch_transform is not None:
+            transformed = self.patch_transform(image=image, mask=mask)
+            image = transformed["image"]
+            mask = transformed["mask"]
 
-        while min_transformed_coverage < 0.5:
-            transformed = self.transform(image=image, mask=mask)
-            transformed_image = transformed["image"]
-            transformed_mask = transformed["mask"]
-            transformed_coverage = transformed_mask.sum(0).sum(0)
-            transformed_coverage_percent = transformed_coverage / transformed_coverage.sum(
-            )
-            transformed_coverage_percent = np.clip(
-                transformed_coverage_percent, a_min=eps, a_max=None)
-            relative_coverage = transformed_coverage_percent / coverage_percent
-            min_transformed_coverage = relative_coverage[1:].min()
+        expected_shape = image.shape
 
-        transformed_image = transformed_image.transpose(2, 0, 1)
-        transformed_mask = transformed_mask.transpose(2, 0, 1)
+        if self.augment_transform is not None:
+            transformed = self.augment_transform(image=image, mask=mask)
+            image = transformed["image"]
+            mask = transformed["mask"]
 
-        return torch.from_numpy(transformed_image), torch.from_numpy(
-            transformed_mask)
+        if self.patch_transform is not None and expected_shape != image.shape:
+            transformed = self.patch_transform(image=image, mask=mask)
+            image = transformed["image"]
+            mask = transformed["mask"]
+
+        image = np.clip(image, 0., 1.)
+
+        return image, mask
+
+
+class RepeatedDatasetAugmenter(AugmentedDataset):
+    def __init__(self,
+                 dataset,
+                 patch_transform,
+                 augments=None,
+                 preprocessing_transform=None,
+                 shuffle=False,
+                 min_train_samples=200,
+                 **kwargs):
+        super().__init__(dataset, preprocessing_transform, patch_transform,
+                         augments)
+        num_elements = len(self.dataset)
+        self.data_map = list(range(num_elements))
+        self.shuffle = shuffle
+        self.augments = augments
+        self.repeats = 1
+        if num_elements < min_train_samples:
+            self.repeats = ceil(min_train_samples / num_elements)
+
+    def __len__(self):
+        return len(self.dataset) * self.repeats
+
+    def __getitem__(self, idx):
+
+        repeat_idx = idx % len(self.dataset)
+
+        if repeat_idx == 0 and self.shuffle:
+            random.shuffle(self.data_map)
+
+        image, mask = super().__getitem__(self.data_map[idx])
+
+        image = image.transpose(2, 0, 1)
+        mask = mask.transpose(2, 0, 1)
+
+        image = torch.from_numpy(image)
+        mask = torch.from_numpy(mask)
+
+        return image, mask
 
 
 class DatasetAugmenter(AugmentedDataset):
+    def __init__(self,
+                 dataset,
+                 patch_transform,
+                 augments=None,
+                 preprocessing_transform=None,
+                 shuffle=False,
+                 **kwargs):
+        super().__init__(dataset, preprocessing_transform, patch_transform,
+                         augments)
+        num_elements = len(self.dataset)
+        self.data_map = list(range(num_elements))
+        self.shuffle = shuffle
+        self.augments = augments
+
+    def __len__(self):
+        return len(self.dataset)
+
     def __getitem__(self, idx):
 
-        image, mask = super().__getitem__(idx)
+        if idx == 0 and self.shuffle:
+            random.shuffle(self.data_map)
+
+        image, mask = super().__getitem__(self.data_map[idx])
+
+        image = image.transpose(2, 0, 1)
+        mask = mask.transpose(2, 0, 1)
+
+        image = torch.from_numpy(image)
+        mask = torch.from_numpy(mask)
+
+        return image, mask
+
+
+class RepeatedBatchDatasetAugmenter(AugmentedDataset):
+    def __init__(self,
+                 dataset,
+                 patch_transform,
+                 augments=None,
+                 preprocessing_transform=None,
+                 shuffle=False,
+                 min_train_samples=200,
+                 **kwargs):
+        super().__init__(dataset, preprocessing_transform, patch_transform,
+                         augments)
+        num_elements = len(self.dataset)
+        self.data_map = list(range(num_elements))
+        self.shuffle = shuffle
+        self.augments = augments
+        self.repeats = 1
+        if num_elements < min_train_samples:
+            self.repeats = ceil(min_train_samples / num_elements)
+
+    def __len__(self):
+        return len(self.dataset) * self.repeats * 4
+
+    @lru_cache(maxsize=10)
+    def get_dataset_img(self, dataset_idx):
+        return super().__getitem__(dataset_idx)
+
+    def __getitem__(self, idx):
+
+        repeat_idx = idx % (4 * len(self.dataset))
+
+        if repeat_idx == 0 and self.shuffle:
+            random.shuffle(self.data_map)
+
+        img_idx = repeat_idx // 4
+
+        image, mask = self.get_dataset_img(self.data_map[img_idx])
+
+        image = image.transpose(2, 0, 1)
+        mask = mask.transpose(2, 0, 1)
+
+        flip_idx = repeat_idx % 4
+
+        image = torch.from_numpy(image)
+        mask = torch.from_numpy(mask)
+
+        if flip_idx == 1:
+            image = torch.flip(image, [1])
+            mask = torch.flip(mask, [1])
+
+        if flip_idx == 2:
+            image = torch.flip(image, [2])
+            mask = torch.flip(mask, [2])
+
+        if flip_idx == 3:
+            image = torch.flip(image, [1, 2])
+            mask = torch.flip(mask, [1, 2])
+
+        return image, mask
+
+
+class BatchDatasetAugmenter(AugmentedDataset):
+    def __init__(self,
+                 dataset,
+                 patch_transform,
+                 augments=None,
+                 preprocessing_transform=None,
+                 shuffle=False,
+                 **kwargs):
+        super().__init__(dataset, preprocessing_transform, patch_transform,
+                         augments)
+        num_elements = len(self.dataset)
+        self.data_map = list(range(num_elements))
+        self.shuffle = shuffle
+        self.augments = augments
+
+    @lru_cache(maxsize=10)
+    def get_dataset_img(self, dataset_idx):
+        return super().__getitem__(dataset_idx)
+
+    def __len__(self):
+        return len(self.dataset) * 4
+
+    def __getitem__(self, idx):
+
+        if idx == 0 and self.shuffle:
+            random.shuffle(self.data_map)
+
+        img_idx = idx // 4
+        flip_idx = idx % 4
+
+        image, mask = self.get_dataset_img(self.data_map[img_idx])
+
+        image = image.transpose(2, 0, 1)
+        mask = mask.transpose(2, 0, 1)
+
+        image = torch.from_numpy(image)
+        mask = torch.from_numpy(mask)
+
+        if flip_idx == 1:
+            image = torch.flip(image, [1])
+            mask = torch.flip(mask, [1])
+
+        if flip_idx == 2:
+            image = torch.flip(image, [2])
+            mask = torch.flip(mask, [2])
+
+        if flip_idx == 3:
+            image = torch.flip(image, [1, 2])
+            mask = torch.flip(mask, [1, 2])
 
         return image, mask
