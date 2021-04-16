@@ -179,7 +179,6 @@ class Segmenter(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        loss = self.loss(y_hat, y, validation=True)
         self.write_predictions(x,
                                y,
                                y_hat,
@@ -187,9 +186,34 @@ class Segmenter(pl.LightningModule):
                                prefix="val",
                                batches_to_write=self.val_batches_to_write)
 
-        iou = smp.utils.metrics.IoU(threshold=0.5)(y_hat, y)
-        self.log("val_iou", iou, prog_bar=True)
+        if self.batch_loss_multiplier > 0:
+            assert y_hat.shape[0] % 4 == 0
 
+            num_images = y_hat.shape[0] // 4
+
+            loss = 0
+            ious = []
+            for batch, idx in enumerate(range(0, num_images, 4)):
+                y_hat_batch = y_hat[idx:idx + 4, :, :, :]
+                y_batch = y[idx:idx + 4, :, :, :]
+                y_hat_batch, y_batch = harmonize_batch(y_hat_batch, y_batch)
+
+                weighted_batch_loss_values, unweighted_batch_loss_values = self.sample_loss(
+                    y_hat_batch, y_batch)
+
+                loss += torch.stack(list(
+                    weighted_batch_loss_values.values())).sum()
+
+                ious.append(
+                    smp.utils.metrics.IoU(threshold=0.5)(y_hat_batch, y_batch))
+
+            iou = torch.stack(ious).mean()
+
+        else:
+            loss = self.loss(y_hat, y)
+            iou = smp.utils.metrics.IoU(threshold=0.5)(y_hat, y)
+
+        self.log("val_iou", iou, prog_bar=True)
         self.log("val_loss", loss, prog_bar=True)
         return {"val_loss", loss}
 
