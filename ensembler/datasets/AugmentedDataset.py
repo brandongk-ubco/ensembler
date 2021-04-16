@@ -133,6 +133,9 @@ class DatasetAugmenter(AugmentedDataset):
     def get_dataset_img(self, dataset_idx):
         return super().__getitem__(dataset_idx)
 
+    def __len__(self):
+        return len(self.dataset) * 4
+
     def __getitem__(self, idx):
 
         if idx == 0 and self.shuffle:
