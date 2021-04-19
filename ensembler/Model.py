@@ -42,9 +42,9 @@ class Segmenter(pl.LightningModule):
                             type=str,
                             default="efficientnet-b3")
         parser.add_argument('--depth', type=int, default=5)
-        parser.add_argument('--focal_loss_multiplier', type=float, default=1.)
-        parser.add_argument('--dice_loss_multiplier', type=float, default=1.)
-        parser.add_argument('--bce_loss_multiplier', type=float, default=0.)
+        parser.add_argument('--focal_loss_multiplier', type=float, default=0.)
+        parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
+        parser.add_argument('--bce_loss_multiplier', type=float, default=1.)
         parser.add_argument('--weight_decay', type=float, default=0)
         parser.add_argument('--learning_rate', type=float, default=1e-4)
         parser.add_argument('--min_learning_rate', type=float, default=1e-7)
