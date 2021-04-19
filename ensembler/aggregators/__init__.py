@@ -26,6 +26,7 @@ def harmonize_batch(y_hat,
     y_hat = reduction(y_hat)
     y_hat = torch.unsqueeze(y_hat, 0)
     y_hat = torch.nn.Softmax2d()(y_hat)
+    y_hat = y_hat[0, :, :, :]
     y = y[0, :, :, :]
 
     return y_hat, y
