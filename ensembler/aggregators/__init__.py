@@ -24,6 +24,8 @@ def harmonize_batch(y_hat,
     assert torch.all(y[3, :, :, :] - y[0, :, :, :] <= eps)
 
     y_hat = reduction(y_hat)
+    y_hat = torch.unsqueeze(y_hat, 0)
+    y_hat = torch.nn.Softmax2d()(y_hat)
     y = y[0, :, :, :]
 
     return y_hat, y

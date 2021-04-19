@@ -189,11 +189,10 @@ class Segmenter(pl.LightningModule):
 
         if self.batch_loss_multiplier > 0:
             assert y_hat.shape[0] % 4 == 0
-
             num_images = y_hat.shape[0] // 4
 
             loss = 0
-            ious = []
+            batch_ious = []
             for batch, idx in enumerate(range(0, num_images, 4)):
                 y_hat_batch = y_hat[idx:idx + 4, :, :, :]
                 y_batch = y[idx:idx + 4, :, :, :]
@@ -205,10 +204,11 @@ class Segmenter(pl.LightningModule):
                 loss += torch.stack(list(
                     weighted_batch_loss_values.values())).sum()
 
-                ious.append(
-                    smp.utils.metrics.IoU(threshold=0.5)(y_hat_batch, y_batch))
+                iou = classwise_metric(y_hat_batch, y_batch)
+                batch_ious.append(torch.Tensor(iou))
 
-            iou = torch.stack(ious).mean()
+                mean_ious = torch.stack(batch_ious).mean(dim=0)
+                iou = mean_ious.mean()
 
         else:
             loss = self.loss(y_hat, y)
@@ -218,14 +218,45 @@ class Segmenter(pl.LightningModule):
                                        y[batch_idx, :, :, :])
                 batch_ious.append(torch.Tensor(iou))
             mean_ious = torch.stack(batch_ious).mean(dim=0)
-            for i, c in enumerate(self.dataset.classes):
-                self.log("val_iou_{}".format(c), mean_ious[i])
 
             iou = mean_ious.mean()
+
+        for i, c in enumerate(self.dataset.classes):
+            self.log("val_iou_{}".format(c), mean_ious[i])
 
         self.log("val_iou", iou, prog_bar=True)
         self.log("val_loss", loss, prog_bar=True)
         return {"val_loss", loss}
+
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        image_names = self.test_data.dataset.get_image_names()
+        outdir = os.path.join(self.logger.log_dir, "predictions")
+
+        os.makedirs(outdir, exist_ok=True)
+        if self.batch_loss_multiplier > 0:
+            assert y_hat.shape[0] % 4 == 0
+            num_images = y_hat.shape[0] // 4
+        else:
+            batch_size = y_hat.shape[0]
+
+            for i in range(batch_size):
+                x_batch = x[
+                    i, :, :, :].clone().detach().cpu().numpy().transpose(
+                        1, 2, 0)
+                y_batch = y[
+                    i, :, :, :].clone().detach().cpu().numpy().transpose(
+                        1, 2, 0)
+                y_hat_batch = y_hat[
+                    i, :, :, :].clone().detach().cpu().numpy().transpose(
+                        1, 2, 0)
+                image_name = image_names[batch_idx * batch_size + i]
+                outfile = os.path.join(outdir, image_name)
+                np.savez_compressed(outfile,
+                                    image=x_batch,
+                                    mask=y_batch,
+                                    predicted_mask=y_hat_batch)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(),

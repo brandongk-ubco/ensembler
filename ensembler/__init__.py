@@ -2,12 +2,14 @@ from enum import Enum
 from ensembler import train
 from ensembler import dataset_statistics
 from ensembler import dataset_initialize
+from ensembler import predict
 
 
 class Tasks(Enum):
     train = "train"
     dataset_statistic = "dataset_statistics"
     dataset_initialize = "dataset_initialize"
+    predict = "predict"
 
     def __str__(self):
         return self.name
@@ -22,6 +24,8 @@ class Tasks(Enum):
     def description(task):
         if task == "train":
             return train.description
+        if task == "predict":
+            return predict.description
         if task == "dataset_statistics":
             return dataset_statistics.description
         if task == "dataset_initialize":
@@ -32,6 +36,8 @@ class Tasks(Enum):
     def add_argparse_args(task):
         if task == "train":
             return train.add_argparse_args
+        if task == "predict":
+            return predict.add_argparse_args
         if task == "dataset_statistics":
             return dataset_statistics.add_argparse_args
         if task == "dataset_initialize":
@@ -42,6 +48,8 @@ class Tasks(Enum):
     def get(task):
         if task == "train":
             return train.execute
+        if task == "predict":
+            return predict.execute
         if task == "dataset_statistics":
             return dataset_statistics.execute
         if task == "dataset_initialize":
