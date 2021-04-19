@@ -3,7 +3,8 @@ import torch
 
 def harmonize_batch(y_hat,
                     y,
-                    reduction=lambda y_hat: 1 - torch.prod(1 - y_hat, dim=0)):
+                    reduction=lambda y_hat: 1 - torch.prod(1 - y_hat, dim=0),
+                    activation=torch.nn.Softmax2d()):
 
     y_hat = y_hat.clone()
     y = y.clone()
@@ -24,9 +25,9 @@ def harmonize_batch(y_hat,
     assert torch.all(y[3, :, :, :] - y[0, :, :, :] <= eps)
 
     y_hat = reduction(y_hat)
-    y_hat = torch.unsqueeze(y_hat, 0)
-    y_hat = torch.nn.Softmax2d()(y_hat)
-    y_hat = y_hat[0, :, :, :]
+    # y_hat = torch.unsqueeze(y_hat, 0)
+    # y_hat = activation(y_hat)
+    # y_hat = y_hat[0, :, :, :]
     y = y[0, :, :, :]
 
     return y_hat, y

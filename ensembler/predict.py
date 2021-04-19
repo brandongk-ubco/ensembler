@@ -18,29 +18,6 @@ def add_argparse_args(parser):
     return parser
 
 
-def predict(i, x, y):
-    x = x.to("cuda")
-    y = y.to("cuda")
-    batch_size = x.shape[0]
-    y_hat = m(x)
-    x = x.cpu().numpy()
-    y = y.cpu().numpy()
-    y_hat = y_hat.cpu().numpy()
-
-    assert y_hat.shape == y.shape
-
-    for img_num in range(batch_size):
-        name = image_names[i * batch_size + img_num]
-        prediction = y_hat[img_num, :, :, :]
-        img = x[img_num, :, :, :]
-        mask = y[img_num, :, :, :]
-
-        np.savez_compressed(os.path.join(outdir, name),
-                            prediction=prediction,
-                            image=img,
-                            mask=mask)
-
-
 def execute(args):
 
     dict_args = vars(args)

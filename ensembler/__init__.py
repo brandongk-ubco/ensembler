@@ -3,6 +3,8 @@ from ensembler import train
 from ensembler import dataset_statistics
 from ensembler import dataset_initialize
 from ensembler import predict
+from ensembler import evaluate
+from ensembler import visualize
 
 
 class Tasks(Enum):
@@ -10,6 +12,8 @@ class Tasks(Enum):
     dataset_statistic = "dataset_statistics"
     dataset_initialize = "dataset_initialize"
     predict = "predict"
+    evaluate = "evaluate"
+    visualize = "visualize"
 
     def __str__(self):
         return self.name
@@ -26,6 +30,10 @@ class Tasks(Enum):
             return train.description
         if task == "predict":
             return predict.description
+        if task == "evaluate":
+            return evaluate.description
+        if task == "visualize":
+            return visualize.description
         if task == "dataset_statistics":
             return dataset_statistics.description
         if task == "dataset_initialize":
@@ -38,6 +46,10 @@ class Tasks(Enum):
             return train.add_argparse_args
         if task == "predict":
             return predict.add_argparse_args
+        if task == "evaluate":
+            return evaluate.add_argparse_args
+        if task == "visualize":
+            return visualize.add_argparse_args
         if task == "dataset_statistics":
             return dataset_statistics.add_argparse_args
         if task == "dataset_initialize":
@@ -50,6 +62,10 @@ class Tasks(Enum):
             return train.execute
         if task == "predict":
             return predict.execute
+        if task == "evaluate":
+            return evaluate.execute
+        if task == "visualize":
+            return visualize.execute
         if task == "dataset_statistics":
             return dataset_statistics.execute
         if task == "dataset_initialize":

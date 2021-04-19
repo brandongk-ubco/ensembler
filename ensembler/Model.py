@@ -238,6 +238,30 @@ class Segmenter(pl.LightningModule):
         if self.batch_loss_multiplier > 0:
             assert y_hat.shape[0] % 4 == 0
             num_images = y_hat.shape[0] // 4
+
+            for batch, idx in enumerate(range(0, num_images, 4)):
+                image_name = image_names[batch_idx * num_images + batch]
+                y_hat_batch = y_hat[idx:idx + 4, :, :, :]
+                y_batch = y[idx:idx + 4, :, :, :]
+                y_hat_batch, y_batch = harmonize_batch(y_hat_batch, y_batch)
+
+                x_batch = x[idx, :, :, :]
+                x_batch = x_batch.clone().detach().cpu().numpy().transpose(
+                    1, 2, 0)
+                y_batch = y_batch.clone().detach().cpu().numpy().transpose(
+                    1, 2, 0)
+                y_hat_batch = y_hat_batch.clone().detach().cpu().numpy(
+                ).transpose(1, 2, 0)
+
+                y_batch = np.argmax(y_batch, axis=2)
+                y_hat_batch = np.argmax(y_hat_batch, axis=2)
+
+                outfile = os.path.join(outdir, image_name)
+                np.savez_compressed(outfile,
+                                    image=x_batch,
+                                    mask=y_batch,
+                                    predicted_mask=y_hat_batch)
+
         else:
             batch_size = y_hat.shape[0]
 
@@ -251,6 +275,10 @@ class Segmenter(pl.LightningModule):
                 y_hat_batch = y_hat[
                     i, :, :, :].clone().detach().cpu().numpy().transpose(
                         1, 2, 0)
+
+                y_batch = np.argmax(y_batch, axis=2)
+                y_hat_batch = np.argmax(y_hat_batch, axis=2)
+
                 image_name = image_names[batch_idx * batch_size + i]
                 outfile = os.path.join(outdir, image_name)
                 np.savez_compressed(outfile,

@@ -1,16 +1,19 @@
-import matplotlib
 import numpy as np
 import os
-from p_tqdm import p_uimap as mapper
+from ensembler.p_tqdm import p_uimap as mapper
 import pandas as pd
 from sklearn.metrics import precision_score, recall_score, f1_score, jaccard_score
 import glob
-from parameters import args
-from datasets import Datasets
+import yaml
+from ensembler.datasets import Datasets
+from functools import partial
 
-matplotlib.use('Agg')
+description = "Evaluate the performance of a model."
 
-outdir = "/mnt/d/work/repos/ensembler/lightning_logs/version_8/predictions/"
+
+def add_argparse_args(parser):
+    parser.add_argument('version', type=str)
+    return parser
 
 
 def to_one_hot(mask, num_classes):
@@ -24,17 +27,15 @@ def to_one_hot(mask, num_classes):
     return label_mask
 
 
-def evaluate_prediction(src):
+def evaluate_prediction(src, dataset):
     prediction = np.load(src)
-    predicted_mask = prediction["prediction"].transpose(1, 2, 0)
-    image = prediction["image"].transpose(1, 2, 0)
-    mask = prediction["mask"].transpose(1, 2, 0)
+    predicted_mask = prediction["predicted_mask"]
+    mask = prediction["mask"]
 
     filename = os.path.basename(src)
     name, ext = os.path.splitext(filename)
-    mask = to_one_hot(np.argmax(mask, axis=2), dataset.num_classes)
-    predicted_mask = to_one_hot(np.argmax(predicted_mask, axis=2),
-                                dataset.num_classes)
+    mask = to_one_hot(mask, dataset.num_classes)
+    predicted_mask = to_one_hot(predicted_mask, dataset.num_classes)
 
     result = pd.DataFrame()
 
@@ -87,18 +88,32 @@ def evaluate_prediction(src):
     return result
 
 
-if __name__ == '__main__':
+def execute(args):
 
     dict_args = vars(args)
 
-    dataset = Datasets.get(dict_args["dataset"])
+    base_dir = os.path.abspath(".")
 
-    predictions = glob.glob(os.path.join(outdir, "*.npz"))
+    model_dir = os.path.join(base_dir, "lightning_logs",
+                             "version_{}".format(dict_args["version"]))
+
+    predictions_dir = os.path.join(model_dir, "predictions")
+
+    hparams_file = os.path.join(model_dir, "hparams.yaml")
+    with open(hparams_file, "r") as hf:
+        hparams = yaml.load(hf)
+
+    hparams.update(dict_args)
+
+    predictions = glob.glob(os.path.join(predictions_dir, "*.npz"))
+
+    dataset = Datasets.get(hparams["dataset_name"])
 
     df = pd.DataFrame()
-    for result in mapper(evaluate_prediction, predictions):
+    for result in mapper(partial(evaluate_prediction, dataset=dataset),
+                         predictions):
         df = df.append(result, ignore_index=True)
-    df.to_csv(os.path.join(outdir, "metrics.csv"), index=False)
+    df.to_csv(os.path.join(model_dir, "metrics.csv"), index=False)
 
     means = df.groupby(by=["class"]).mean().reset_index()
-    means.to_csv(os.path.join(outdir, "mean_metrics.csv"), index=False)
+    means.to_csv(os.path.join(model_dir, "mean_metrics.csv"), index=False)
