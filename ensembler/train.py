@@ -11,7 +11,7 @@ description = "Train a model."
 
 
 def add_argparse_args(parser):
-    parser.add_argument('--batch_loss_multiplier', type=float, default=0.)
+    parser.add_argument('--batch_loss_multiplier', type=float, default=1.)
     parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--num_workers', type=int, default=os.cpu_count() - 1),
     parser.add_argument('--batch_size', type=int, default=8)
@@ -39,6 +39,9 @@ def execute(args):
                                    patience=3 * dict_args["patience"],
                                    mode='max'),
         pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
+        pl.callbacks.ModelCheckpoint(monitor='val_iou',
+                                     save_top_k=3,
+                                     mode="max"),
         RecordTrainStatus()
     ]
 
