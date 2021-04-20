@@ -97,17 +97,15 @@ class CityscapesDatasetInitializer:
         mask = np.array(mask)
 
         label_mask = np.zeros((20, mask.shape[0], mask.shape[1]),
-                              dtype=image.dtype)
+                              dtype=np.bool)
 
         for k, v in mapping_20.items():
             label_mask[v, mask == k] = 1
 
-        image = image.astype("float32") / 255.
         label_mask = label_mask.transpose(1, 2, 0)
 
-        label_mask = torch.Tensor(label_mask)
-        image = torch.Tensor(image)
-
+        label_mask = torch.BoolTensor(label_mask)
+        image = torch.ByteTensor(image)
         return image, label_mask
 
 

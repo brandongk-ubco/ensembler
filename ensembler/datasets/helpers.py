@@ -1,6 +1,4 @@
 import pandas as pd
-import os
-import json
 
 
 def split_dataset(dataframe, percent, seed=42):
@@ -19,7 +17,7 @@ def split_dataset(dataframe, percent, seed=42):
     second_samples = pd.DataFrame(columns=dataframe.columns,
                                   index=range(num_second_samples))
     class_counts = dataframe.astype(bool).sum(axis=0)[2:]
-    class_counts.sort_values(inplace=True)
+    class_counts = class_counts.sort_values(ascending=True)
 
     first_idx = 0
     second_idx = 0
@@ -92,7 +90,7 @@ def split_dataset(dataframe, percent, seed=42):
 
 def sample_dataset(dataframe, seed=42):
     class_counts = dataframe.astype(bool).sum(axis=0)[2:]
-    class_counts.sort_values(inplace=True)
+    class_counts = class_counts.sort_values(ascending=True)
     sample_count = class_counts.min()
 
     print("Sampling {} from each class.".format(sample_count))

@@ -2,8 +2,6 @@ import os
 import glob
 import numpy as np
 import torch
-from ensembler.datasets._base import base_get_dataloaders, base_get_all_dataloader
-from functools import partial
 
 
 class CompressedNpzDataset:
@@ -46,6 +44,8 @@ class CompressedNpzDataset:
 
         image = image_np["image"]
         mask = image_np["mask"]
+
+        mask = mask.astype(image.dtype)
 
         return image_name, image, mask
 

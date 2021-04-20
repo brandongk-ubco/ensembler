@@ -3,6 +3,7 @@ from ensembler.p_tqdm import t_imap as mapper
 import numpy as np
 from ensembler.datasets import Datasets
 from functools import partial
+import gzip
 
 description = "Prepare dataset statistics required for sampling."
 
@@ -37,4 +38,4 @@ def execute(args):
                                      total=num_images):
         image_name = image_names[idx]
         outfile = os.path.join(outdir, image_name)
-        np.savez_compressed(outfile, image=image, mask=mask)
+        np.savez_compressed(file=outfile, image=image, mask=mask)

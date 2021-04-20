@@ -21,11 +21,10 @@ def get_augments(image_height, image_width):
         A.RandomScale(scale_limit=0.1),
         A.Rotate(limit=10),
         A.Flip(p=0.75),
-        A.FromFloat(dtype='uint8', always_apply=True),
         # A.ElasticTransform(alpha=20, sigma=20 * 0.05, alpha_affine=20 * 0.03),
         A.OneOf(
             [
-                # A.JpegCompression(quality_lower=90),
+                A.JpegCompression(quality_lower=90),
                 A.Blur(),
                 A.GaussNoise(),
                 # A.MultiplicativeNoise(),
@@ -48,7 +47,8 @@ def get_augments(image_height, image_width):
                       border_mode=0,
                       value=0.,
                       mask_value=0.,
-                      always_apply=True)
+                      always_apply=True),
+        A.ToFloat(always_apply=True)
     ])
 
     return (preprocessing_transform, train_transform, patch_transform,

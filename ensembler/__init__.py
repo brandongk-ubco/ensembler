@@ -9,8 +9,8 @@ from ensembler import visualize
 
 class Tasks(Enum):
     train = "train"
-    dataset_statistic = "dataset_statistics"
-    dataset_initialize = "dataset_initialize"
+    split = "split"
+    dataset_initialize = "initialize"
     predict = "predict"
     evaluate = "evaluate"
     visualize = "visualize"
@@ -34,9 +34,9 @@ class Tasks(Enum):
             return evaluate.description
         if task == "visualize":
             return visualize.description
-        if task == "dataset_statistics":
+        if task == "split":
             return dataset_statistics.description
-        if task == "dataset_initialize":
+        if task == "initialize":
             return dataset_initialize.description
 
         raise ValueError("Task {} not defined".format(task))
@@ -50,9 +50,9 @@ class Tasks(Enum):
             return evaluate.add_argparse_args
         if task == "visualize":
             return visualize.add_argparse_args
-        if task == "dataset_statistics":
+        if task == "split":
             return dataset_statistics.add_argparse_args
-        if task == "dataset_initialize":
+        if task == "initialize":
             return dataset_initialize.add_argparse_args
 
         raise ValueError("Task {} not defined".format(task))
@@ -66,9 +66,9 @@ class Tasks(Enum):
             return evaluate.execute
         if task == "visualize":
             return visualize.execute
-        if task == "dataset_statistics":
+        if task == "split":
             return dataset_statistics.execute
-        if task == "dataset_initialize":
+        if task == "initialize":
             return dataset_initialize.execute
 
         raise ValueError("Task {} not defined".format(task))

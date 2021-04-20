@@ -50,6 +50,7 @@ class AugmentedDataset:
             mask = transformed["mask"]
 
         image = np.clip(image, 0., 1.)
+        mask = mask.astype(image.dtype)
 
         return image, mask
 

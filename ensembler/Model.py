@@ -204,7 +204,9 @@ class Segmenter(pl.LightningModule):
                 loss += torch.stack(list(
                     weighted_batch_loss_values.values())).sum()
 
-                iou = classwise_metric(y_hat_batch, y_batch)
+                y_hat_batch_softmax = torch.nn.Softmax(dim=0)(y_hat_batch)
+
+                iou = classwise_metric(y_hat_batch_softmax, y_batch)
                 batch_ious.append(torch.Tensor(iou))
 
                 mean_ious = torch.stack(batch_ious).mean(dim=0)
