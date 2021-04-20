@@ -5,7 +5,7 @@ import numpy as np
 import os
 from matplotlib import pyplot as plt
 from ensembler.losses import FocalLoss, SoftBCELoss
-from ensembler.utils import crop_image_only_outside, classwise_metric
+from ensembler.utils import crop_image_only_outside
 from ensembler.aggregators import harmonize_batch
 
 
@@ -63,19 +63,52 @@ class Segmenter(pl.LightningModule):
             torch.nn.BatchNorm2d(3), model)
         return model
 
+    def classwise(self,
+                  y_hat,
+                  y,
+                  weights=None,
+                  metric=smp.utils.metrics.IoU(threshold=0.5),
+                  dim=0):
+        results = torch.empty(y_hat.shape[dim],
+                              dtype=y_hat.dtype,
+                              device=self.device)
+        for i in torch.tensor(range(y_hat.shape[dim]),
+                              dtype=torch.long,
+                              device=self.device):
+            y_hat_class = y_hat.index_select(dim, i)
+            y_class = y.index_select(dim, i)
+            results[i] = metric(y_hat_class, y_class)
+
+        if weights is not None:
+            results = results * weights
+
+        return results.mean()
+
     def sample_loss(self, y_hat, y, base_multiplier=1.):
 
-        focal_loss = FocalLoss("multilabel",
-                               weights=self.dataset.loss_weights,
-                               from_logits=False)(y_hat, y)
+        weights = torch.tensor(self.dataset.loss_weights,
+                               dtype=y_hat.dtype,
+                               device=self.device)
 
-        dice_loss = smp.losses.DiceLoss(
-            "multilabel",
-            from_logits=False,
-            classes=range(1, self.dataset.num_classes))(y_hat, y)
+        focal_loss = self.classwise(y_hat,
+                                    y,
+                                    metric=FocalLoss("binary",
+                                                     from_logits=False),
+                                    weights=weights,
+                                    dim=1)
 
-        bce_loss = SoftBCELoss(from_logits=False,
-                               weights=self.dataset.loss_weights)(y_hat, y)
+        dice_loss = self.classwise(y_hat,
+                                   y,
+                                   metric=smp.losses.DiceLoss(
+                                       "binary", from_logits=False),
+                                   weights=weights,
+                                   dim=1)
+
+        bce_loss = self.classwise(y_hat,
+                                  y,
+                                  metric=SoftBCELoss(),
+                                  weights=weights,
+                                  dim=1)
 
         weighted_bce_loss = base_multiplier * self.bce_loss_multiplier * bce_loss
         weighted_focal_loss = base_multiplier * self.focal_loss_multiplier * focal_loss
@@ -206,25 +239,18 @@ class Segmenter(pl.LightningModule):
 
                 y_hat_batch_softmax = torch.nn.Softmax(dim=0)(y_hat_batch)
 
-                iou = classwise_metric(y_hat_batch_softmax, y_batch)
-                batch_ious.append(torch.Tensor(iou))
-
-                mean_ious = torch.stack(batch_ious).mean(dim=0)
-                iou = mean_ious.mean()
-
+                iou = self.classwise(y_hat_batch_softmax, y_batch)
+                batch_ious.append(iou)
         else:
             loss = self.loss(y_hat, y)
             batch_ious = []
             for batch_idx in range(y_hat.shape[0]):
-                iou = classwise_metric(y_hat[batch_idx, :, :, :],
-                                       y[batch_idx, :, :, :])
-                batch_ious.append(torch.Tensor(iou))
-            mean_ious = torch.stack(batch_ious).mean(dim=0)
+                iou = self.classwise(y_hat[batch_idx, :, :, :],
+                                     y[batch_idx, :, :, :])
+                batch_ious.append(iou)
 
-            iou = mean_ious.mean()
-
-        for i, c in enumerate(self.dataset.classes):
-            self.log("val_iou_{}".format(c), mean_ious[i])
+        mean_ious = torch.stack(batch_ious)
+        iou = mean_ious.mean()
 
         self.log("val_iou", iou, prog_bar=True)
         self.log("val_loss", loss, prog_bar=True)

@@ -14,7 +14,6 @@ class SoftBCELoss(nn.Module):
     ]
 
     def __init__(self,
-                 weights=None,
                  ignore_index: Optional[int] = -100,
                  reduction: str = "mean",
                  smooth_factor: Optional[float] = None,
@@ -38,7 +37,6 @@ class SoftBCELoss(nn.Module):
         self.reduction = reduction
         self.smooth_factor = smooth_factor
         self.from_logits = from_logits
-        self.weights = weights
 
     def forward(self, y_pred: torch.Tensor,
                 y_true: torch.Tensor) -> torch.Tensor:
@@ -65,10 +63,6 @@ class SoftBCELoss(nn.Module):
             loss = F.binary_cross_entropy(y_pred,
                                           soft_targets,
                                           reduction="none")
-
-        if self.weights is not None:
-            for i, w in enumerate(self.weights):
-                loss[:, i, ::] *= w
 
         if self.ignore_index is not None:
             not_ignored_mask = y_true != self.ignore_index

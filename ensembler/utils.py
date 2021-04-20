@@ -1,6 +1,3 @@
-import segmentation_models_pytorch as smp
-
-
 def RoundUp(x, mul):
     return ((x + mul - 1) & (-mul))
 
@@ -26,12 +23,3 @@ def crop_image_only_outside(img, tol=0):
     col_start, col_end = mask0.argmax(), n - mask0[::-1].argmax()
     row_start, row_end = mask1.argmax(), m - mask1[::-1].argmax()
     return row_start, row_end, col_start, col_end
-
-
-def classwise_metric(y_hat, y, metric=smp.utils.metrics.IoU(threshold=0.5)):
-    results = []
-    for i in range(y_hat.shape[0]):
-        y_hat_class = y_hat[i, :, :]
-        y_class = y_hat[i, :, :]
-        results.append(metric(y_hat_class, y_class))
-    return results
