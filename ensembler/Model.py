@@ -42,9 +42,9 @@ class Segmenter(pl.LightningModule):
                             type=str,
                             default="efficientnet-b3")
         parser.add_argument('--depth', type=int, default=5)
-        parser.add_argument('--focal_loss_multiplier', type=float, default=0.)
-        parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
-        parser.add_argument('--bce_loss_multiplier', type=float, default=1.)
+        parser.add_argument('--focal_loss_multiplier', type=float, default=1.)
+        parser.add_argument('--dice_loss_multiplier', type=float, default=1.)
+        parser.add_argument('--bce_loss_multiplier', type=float, default=0.)
         parser.add_argument('--weight_decay', type=float, default=0)
         parser.add_argument('--learning_rate', type=float, default=1e-4)
         parser.add_argument('--min_learning_rate', type=float, default=1e-7)
@@ -128,18 +128,19 @@ class Segmenter(pl.LightningModule):
 
         return weighted_loss_values, unweighted_loss_values
 
-    def loss(self, y_hat, y):
+    def loss(self, y_hat, y, validation=False):
 
-        weighted_loss_values, unweighted_loss_values = self.sample_loss(
-            y_hat.clone(), y.clone())
+        if not validation:
+            weighted_loss_values, unweighted_loss_values = self.sample_loss(
+                y_hat.clone(), y.clone())
 
-        for k, v in unweighted_loss_values.items():
-            self.log("unweighted_{}".format(k), v)
+            for k, v in unweighted_loss_values.items():
+                self.log("unweighted_{}".format(k), v)
 
-        for k, v in weighted_loss_values.items():
-            self.log(k, v, prog_bar=True)
+            for k, v in weighted_loss_values.items():
+                self.log(k, v, prog_bar=True)
 
-        loss = torch.stack(list(weighted_loss_values.values())).sum()
+            loss = torch.stack(list(weighted_loss_values.values())).sum()
 
         if self.batch_loss_multiplier > 0:
             y_hat_batch, y_batch = self.combine_batch(y_hat, y)
@@ -147,7 +148,8 @@ class Segmenter(pl.LightningModule):
             weighted_batch_loss_values, unweighted_batch_loss_values = self.sample_loss(
                 y_hat_batch,
                 y_batch,
-                base_multiplier=self.batch_loss_multiplier)
+                base_multiplier=1. + self.batch_loss_multiplier
+                if validation else self.batch_loss_multiplier)
 
             for k, v in unweighted_batch_loss_values.items():
                 self.log("unweighted_batch_loss_{}".format(k), v)
@@ -160,7 +162,10 @@ class Segmenter(pl.LightningModule):
 
             self.log("batch_loss", batch_loss, prog_bar=True)
 
-            loss += batch_loss
+            if validation:
+                loss = batch_loss
+            else:
+                loss += batch_loss
 
         return loss
 
@@ -236,7 +241,7 @@ class Segmenter(pl.LightningModule):
         x, y = batch
         y_hat = self(x)
 
-        loss = self.loss(y_hat, y)
+        loss = self.loss(y_hat, y, validation=True)
 
         if self.batch_loss_multiplier > 0:
             y_hat, y = self.combine_batch(y_hat, y)
@@ -321,12 +326,12 @@ class Segmenter(pl.LightningModule):
             patience=self.patience,
             min_lr=self.min_learning_rate,
             verbose=True,
-            mode='max')
+            mode='min')
 
         return {
             "optimizer": optimizer,
             "lr_scheduler": scheduler,
-            "monitor": 'val_iou'
+            "monitor": 'val_loss'
         }
 
     def save_prediction(self, img, mask_img, predicted_mask_img, outfile):

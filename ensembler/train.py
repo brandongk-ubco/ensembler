@@ -34,14 +34,25 @@ def execute(args):
 
     dict_args = vars(args)
 
+    # callbacks = [
+    #     pl.callbacks.EarlyStopping('val_iou',
+    #                                patience=3 * dict_args["patience"],
+    #                                mode='max'),
+    #     pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
+    #     pl.callbacks.ModelCheckpoint(monitor='val_iou',
+    #                                  save_top_k=3,
+    #                                  mode="max"),
+    #     RecordTrainStatus()
+    # ]
+
     callbacks = [
-        pl.callbacks.EarlyStopping('val_iou',
-                                   patience=3 * dict_args["patience"],
-                                   mode='max'),
+        pl.callbacks.EarlyStopping(patience=3 * dict_args["patience"],
+                                   monitor='val_loss',
+                                   mode='min'),
         pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
-        pl.callbacks.ModelCheckpoint(monitor='val_iou',
+        pl.callbacks.ModelCheckpoint(monitor='val_loss',
                                      save_top_k=3,
-                                     mode="max"),
+                                     mode="min"),
         RecordTrainStatus()
     ]
 
