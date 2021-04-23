@@ -51,8 +51,9 @@ def execute(args):
                                    mode='min'),
         pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
         pl.callbacks.ModelCheckpoint(monitor='val_loss',
-                                     save_top_k=3,
-                                     mode="min"),
+                                     save_top_k=1,
+                                     mode="min",
+                                     filename='{epoch}-{val_loss:.2f}-{val_iou:.2f}'),
         RecordTrainStatus()
     ]
 

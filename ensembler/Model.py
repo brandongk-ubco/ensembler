@@ -130,7 +130,7 @@ class Segmenter(pl.LightningModule):
 
     def loss(self, y_hat, y, validation=False):
 
-        if not validation:
+        if not validation or self.batch_loss_multiplier == 0:
             weighted_loss_values, unweighted_loss_values = self.sample_loss(
                 y_hat.clone(), y.clone())
 
@@ -255,9 +255,7 @@ class Segmenter(pl.LightningModule):
 
         iou = self.classwise(y_hat, y)
 
-        self.log("val_iou", iou, prog_bar=True)
-        self.log("val_loss", loss, prog_bar=True)
-        return {"val_loss", loss}
+        self.log_dict({"val_loss": loss, "val_iou": iou}, prog_bar=True)
 
     def test_step(self, batch, batch_idx):
         x, y = batch
