@@ -25,9 +25,9 @@ def add_argparse_args(parser):
 
 def get_augmenters(batch_loss):
     if batch_loss:
-        return RepeatedBatchDatasetAugmenter, BatchDatasetAugmenter
+        return RepeatedBatchDatasetAugmenter, BatchDatasetAugmenter, BatchDatasetAugmenter
     else:
-        return RepeatedDatasetAugmenter, DatasetAugmenter
+        return RepeatedDatasetAugmenter, DatasetAugmenter, BatchDatasetAugmenter
 
 
 def execute(args):
@@ -50,10 +50,11 @@ def execute(args):
                                    monitor='val_loss',
                                    mode='min'),
         pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
-        pl.callbacks.ModelCheckpoint(monitor='val_loss',
-                                     save_top_k=1,
-                                     mode="min",
-                                     filename='{epoch}-{val_loss:.2f}-{val_iou:.2f}'),
+        pl.callbacks.ModelCheckpoint(
+            monitor='val_loss',
+            save_top_k=1,
+            mode="min",
+            filename='{epoch}-{val_loss:.2f}-{val_iou:.2f}'),
         RecordTrainStatus()
     ]
 

@@ -31,7 +31,7 @@ def base_get_dataloaders(directory, augmenters, batch_size, augmentations,
                         split="test")
 
     preprocessing_transform, train_transform, patch_transform, test_transform = augmentations
-    train_augmenter, val_augmenter = augmenters
+    train_augmenter, val_augmenter, test_augmenter = augmenters
 
     train_data = train_augmenter(
         train_data,
@@ -40,10 +40,12 @@ def base_get_dataloaders(directory, augmenters, batch_size, augmentations,
         augments=train_transform,
         batch_size=batch_size,
         shuffle=True)
+
     val_data = val_augmenter(val_data,
                              test_transform,
                              preprocessing_transform=preprocessing_transform)
-    test_data = val_augmenter(
+
+    test_data = test_augmenter(
         test_data,
         test_transform,
         preprocessing_transform=preprocessing_transform,

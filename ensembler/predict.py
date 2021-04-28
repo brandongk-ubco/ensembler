@@ -1,10 +1,6 @@
-import matplotlib
 from ensembler.Model import Segmenter
-import numpy as np
 import os
-from tqdm import tqdm
 from ensembler.datasets import Datasets
-import json
 import glob
 from ensembler.train import get_augmenters, get_augments
 import yaml
@@ -24,8 +20,7 @@ def execute(args):
 
     base_dir = os.path.abspath(".")
 
-    model_dir = os.path.join(base_dir, "lightning_logs",
-                             "version_{}".format(dict_args["version"]))
+    model_dir = os.path.join(base_dir, "lightning_logs", dict_args["version"])
 
     hparams_file = os.path.join(model_dir, "hparams.yaml")
     with open(hparams_file, "r") as hf:
@@ -53,23 +48,7 @@ def execute(args):
     hparams["val_data"] = val_data
     hparams["test_data"] = test_data
 
-    logger = pl.loggers.CSVLogger(save_dir=base_dir,
-                                  name="lightning_logs",
-                                  version="version_{}".format(
-                                      dict_args["version"]))
-
     m = Segmenter.load_from_checkpoint(checkpoint, **hparams)
 
-    trainer = pl.Trainer(gpus=1, logger=logger)
+    trainer = pl.Trainer(gpus=1)
     trainer.test(m)
-
-    # test_dataloader = m.test_dataloader()
-    # image_names = test_dataloader.dataset.dataset.get_image_names()
-
-    # m = m.to("cuda")
-
-    # m.eval()
-    # m.freeze()
-    # for i, (x, y) in tqdm(enumerate(test_dataloader),
-    #                       total=len(test_dataloader)):
-    #     predict(i, x, y)

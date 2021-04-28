@@ -260,60 +260,27 @@ class Segmenter(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
+
+        assert y_hat.shape[0] % 4 == 0
+
+        y_hat[1, :, :, :] = torch.flip(y_hat[1, :, :, :], [1])
+        y_hat[2, :, :, :] = torch.flip(y_hat[2, :, :, :], [2])
+        y_hat[3, :, :, :] = torch.flip(y_hat[3, :, :, :], [1, 2])
+
         image_names = self.test_data.dataset.get_image_names()
         outdir = os.path.join(self.logger.log_dir, "predictions")
-
         os.makedirs(outdir, exist_ok=True)
-        if self.batch_loss_multiplier > 0:
-            assert y_hat.shape[0] % 4 == 0
-            num_images = y_hat.shape[0] // 4
 
-            for batch, idx in enumerate(range(0, num_images, 4)):
-                image_name = image_names[batch_idx * num_images + batch]
-                y_hat_batch = y_hat[idx:idx + 4, :, :, :]
-                y_batch = y[idx:idx + 4, :, :, :]
-                y_hat_batch, y_batch = harmonize_batch(y_hat_batch, y_batch)
+        image_name = image_names[batch_idx]
 
-                x_batch = x[idx, :, :, :]
-                x_batch = x_batch.clone().detach().cpu().numpy().transpose(
+        for idx in range(y_hat.shape[0]):
+            prediction = y_hat[
+                idx, :, :, :].clone().detach().cpu().numpy().transpose(
                     1, 2, 0)
-                y_batch = y_batch.clone().detach().cpu().numpy().transpose(
-                    1, 2, 0)
-                y_hat_batch = y_hat_batch.clone().detach().cpu().numpy(
-                ).transpose(1, 2, 0)
+            prediction = (prediction * 255).astype(np.uint8)
 
-                y_batch = np.argmax(y_batch, axis=2)
-                y_hat_batch = np.argmax(y_hat_batch, axis=2)
-
-                outfile = os.path.join(outdir, image_name)
-                np.savez_compressed(outfile,
-                                    image=x_batch,
-                                    mask=y_batch,
-                                    predicted_mask=y_hat_batch)
-
-        else:
-            batch_size = y_hat.shape[0]
-
-            for i in range(batch_size):
-                x_batch = x[
-                    i, :, :, :].clone().detach().cpu().numpy().transpose(
-                        1, 2, 0)
-                y_batch = y[
-                    i, :, :, :].clone().detach().cpu().numpy().transpose(
-                        1, 2, 0)
-                y_hat_batch = y_hat[
-                    i, :, :, :].clone().detach().cpu().numpy().transpose(
-                        1, 2, 0)
-
-                y_batch = np.argmax(y_batch, axis=2)
-                y_hat_batch = np.argmax(y_hat_batch, axis=2)
-
-                image_name = image_names[batch_idx * batch_size + i]
-                outfile = os.path.join(outdir, image_name)
-                np.savez_compressed(outfile,
-                                    image=x_batch,
-                                    mask=y_batch,
-                                    predicted_mask=y_hat_batch)
+            outfile = os.path.join(outdir, "{}_{}".format(image_name, idx))
+            np.savez_compressed(outfile, predicted_mask=prediction)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(),
