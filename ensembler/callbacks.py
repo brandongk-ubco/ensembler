@@ -24,7 +24,7 @@ class RecordTrainStatus(pl.callbacks.Callback):
             },
             "Scheduler": trainer.lr_schedulers[0]["scheduler"].state_dict()
         }
-        with open(os.path.join(trainer.logger.log_dir, "trainer.json"),
+        with open(os.path.join(trainer.logger.save_dir, "trainer.json"),
                   "w") as statefile:
             json.dump(state, statefile, indent=4)
 
@@ -33,16 +33,3 @@ class RecordTrainStatus(pl.callbacks.Callback):
 
     def on_epoch_end(self, trainer, pl_module):
         self._write_train_status(trainer, pl_module)
-
-
-# class ModelSummary(pl.callbacks.Callback):
-#     def on_sanity_check_end(self, trainer, pl_module):
-#         dataloader = trainer.val_dataloaders[0]
-#         batch = next(iter(dataloader))
-#         model_summary = summary(trainer.model,
-#                                 input_size=tuple(batch[0].shape),
-#                                 verbose=0)
-#         print(model_summary)
-#         with open(os.path.join(trainer.logger.log_dir, "model.txt"),
-#                   "w") as modelfile:
-#             modelfile.write(str(model_summary))

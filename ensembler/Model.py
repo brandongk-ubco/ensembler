@@ -42,9 +42,9 @@ class Segmenter(pl.LightningModule):
                             type=str,
                             default="efficientnet-b3")
         parser.add_argument('--depth', type=int, default=5)
-        parser.add_argument('--focal_loss_multiplier', type=float, default=1.)
-        parser.add_argument('--dice_loss_multiplier', type=float, default=1.)
-        parser.add_argument('--bce_loss_multiplier', type=float, default=0.)
+        parser.add_argument('--focal_loss_multiplier', type=float, default=0.)
+        parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
+        parser.add_argument('--bce_loss_multiplier', type=float, default=1.)
         parser.add_argument('--weight_decay', type=float, default=0)
         parser.add_argument('--learning_rate', type=float, default=1e-4)
         parser.add_argument('--min_learning_rate', type=float, default=1e-7)
@@ -268,7 +268,7 @@ class Segmenter(pl.LightningModule):
         y_hat[3, :, :, :] = torch.flip(y_hat[3, :, :, :], [1, 2])
 
         image_names = self.test_data.dataset.get_image_names()
-        outdir = os.path.join(self.logger.log_dir, "predictions")
+        outdir = os.path.join(self.logger.save_dir, "predictions")
         os.makedirs(outdir, exist_ok=True)
 
         image_name = image_names[batch_idx]
@@ -283,9 +283,10 @@ class Segmenter(pl.LightningModule):
             np.savez_compressed(outfile, predicted_mask=prediction)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(),
-                                     lr=self.learning_rate,
-                                     weight_decay=self.weight_decay)
+        optimizer = torch.optim.SGD(self.parameters(),
+                                    lr=self.learning_rate,
+                                    weight_decay=self.weight_decay,
+                                    momentum=0.9)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             patience=self.patience,
@@ -332,7 +333,7 @@ class Segmenter(pl.LightningModule):
             return
 
         try:
-            self.logger.log_dir
+            self.logger.save_dir
         except AttributeError:
             return
 
@@ -361,7 +362,7 @@ class Segmenter(pl.LightningModule):
             predicted_mask_img = predicted_mask_img[row_start:row_end,
                                                     col_start:col_end]
 
-            outfile = os.path.join(self.logger.log_dir,
+            outfile = os.path.join(self.logger.save_dir,
                                    "{}_{}_{}.png".format(prefix, batch_idx, i))
 
             self.save_prediction(img, mask_img, predicted_mask_img, outfile)

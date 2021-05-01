@@ -10,3 +10,4 @@ pathos==0.2.7
 pox==0.2.9
 ppft==1.6.6.3
 git+https://github.com/qubvel/segmentation_models.pytorch
+wandb

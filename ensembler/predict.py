@@ -32,8 +32,27 @@ def execute(args):
         os.path.join(model_dir, "checkpoints", "epoch=*.ckpt"))
 
     assert len(checkpoints) > 0
+    checkpoint_scores = [
+        dict([k.split("=") for k in os.path.split(c[:-5])[-1].split("-")])
+        for c in checkpoints
+    ]
+    checkpoint_scores = [
+        dict([(k, float(v)) for (k, v) in d.items()])
+        for d in checkpoint_scores
+    ]
 
-    checkpoint = sorted(checkpoints)[-1]
+    checkpoints = [{"path": c} for c in checkpoints]
+
+    checkpoints = [{
+        **checkpoint_scores[i],
+        **checkpoints[i]
+    } for i in range(len(checkpoints))]
+
+    checkpoint = sorted(checkpoints,
+                        key=lambda r: -r["val_loss"] * 1000 + r["val_iou"] *
+                        100 + r["epoch"] / 100)[-1]["path"]
+
+    print("Using Checkpoint: {}".format(checkpoint))
 
     dataset = Datasets.get(hparams["dataset_name"])
 

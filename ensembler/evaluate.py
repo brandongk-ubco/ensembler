@@ -66,7 +66,8 @@ def evaluate(y_hat, y):
         "recall": actual_recall_score,
         "f1_score": actual_f1_score,
         "iou": actual_jaccard_score,
-        "accuracy": actual_accuracy_score
+        "accuracy": actual_accuracy_score,
+        "in_class": class_exists
     }
 
 
@@ -182,5 +183,5 @@ def execute(args):
     df = pd.DataFrame(rows)
     df.to_csv(os.path.join(model_dir, "metrics.csv"), index=False)
 
-    means = df.groupby(by=["class", "view"]).mean().reset_index()
+    means = df.groupby(by=["class", "view", "in_class"]).mean().reset_index()
     means.to_csv(os.path.join(model_dir, "mean_metrics.csv"), index=False)

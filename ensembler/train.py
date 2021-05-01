@@ -6,6 +6,7 @@ from ensembler.augments import get_augments
 from ensembler.callbacks import RecordTrainStatus
 from ensembler.datasets.AugmentedDataset import RepeatedDatasetAugmenter, DatasetAugmenter, RepeatedBatchDatasetAugmenter, BatchDatasetAugmenter
 from ensembler.datasets import Datasets
+from pytorch_lightning.loggers import WandbLogger
 
 description = "Train a model."
 
@@ -34,17 +35,6 @@ def execute(args):
 
     dict_args = vars(args)
 
-    # callbacks = [
-    #     pl.callbacks.EarlyStopping('val_iou',
-    #                                patience=3 * dict_args["patience"],
-    #                                mode='max'),
-    #     pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
-    #     pl.callbacks.ModelCheckpoint(monitor='val_iou',
-    #                                  save_top_k=3,
-    #                                  mode="max"),
-    #     RecordTrainStatus()
-    # ]
-
     callbacks = [
         pl.callbacks.EarlyStopping(patience=3 * dict_args["patience"],
                                    monitor='val_loss',
@@ -63,6 +53,8 @@ def execute(args):
     except pl.utilities.exceptions.MisconfigurationException:
         pass
 
+    wandb_logger = WandbLogger(project=dict_args["dataset_name"])
+
     trainer = pl.Trainer.from_argparse_args(
         args,
         gpus=1,
@@ -70,7 +62,8 @@ def execute(args):
         min_epochs=dict_args["patience"],
         deterministic=True,
         max_epochs=sys.maxsize,
-        accumulate_grad_batches=dict_args["accumulate_grad_batches"])
+        accumulate_grad_batches=dict_args["accumulate_grad_batches"],
+        logger=wandb_logger)
 
     dataset = Datasets.get(dict_args["dataset_name"])
 

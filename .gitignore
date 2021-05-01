@@ -6,6 +6,7 @@ local.env
 *.out
 condaenv.*
 hpc_ckpt_*.ckpt
+wandb/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
