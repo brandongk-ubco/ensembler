@@ -142,6 +142,7 @@ class RepeatedBatchDatasetAugmenter(AugmentedDataset):
                          augments)
         num_elements = len(self.dataset)
         self.data_map = list(range(num_elements))
+
         self.shuffle = shuffle
         self.augments = augments
         self.repeats = 1

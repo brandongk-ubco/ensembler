@@ -1,12 +1,11 @@
 from ensembler.datasets._base import base_get_dataloaders, base_get_all_dataloader
 from ensembler.datasets.CompressedNpzDataset import CompressedNpzDataset
 from functools import partial
-import torch
 
 classes = [
-    "background", "road", "sidewalk", "building", "wall", "fence", "pole",
-    "traffic light", "traffic sign", "vegetation", "terrain", "sky", "person",
-    "rider", "car", "truck", "bus", "train", "motorcycle", "bicycle"
+    "road", "sidewalk", "building", "wall", "fence", "pole", "traffic light",
+    "traffic sign", "vegetation", "terrain", "sky", "person", "rider", "car",
+    "truck", "bus", "train", "motorcycle", "bicycle"
 ]
 
 num_classes = len(classes)

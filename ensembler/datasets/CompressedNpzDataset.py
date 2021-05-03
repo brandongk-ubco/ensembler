@@ -45,6 +45,8 @@ class CompressedNpzDataset:
         image = image_np["image"]
         mask = image_np["mask"]
 
+        mask = mask[:, :, 1:]
+
         mask = mask.astype(image.dtype)
 
         return image_name, image, mask

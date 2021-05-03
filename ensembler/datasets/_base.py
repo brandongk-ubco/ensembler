@@ -1,6 +1,7 @@
 import os
 import json
-from ensembler.datasets.helpers import process_split
+from ensembler.datasets.helpers import process_split, repeat_infrequent_classes
+import pandas as pd
 
 
 def base_get_dataloaders(directory, augmenters, batch_size, augmentations,
@@ -10,9 +11,12 @@ def base_get_dataloaders(directory, augmenters, batch_size, augmentations,
         sample_split = json.load(splitjson)
 
     statistics_file = os.path.join(directory, "class_samples.csv")
+    statistics = pd.read_csv(statistics_file)
 
     train_images, val_images, test_images = process_split(
-        sample_split, statistics_file)
+        sample_split, statistics)
+
+    train_images = repeat_infrequent_classes(train_images, statistics)
 
     train_data = Dataset(directory,
                          train_images,

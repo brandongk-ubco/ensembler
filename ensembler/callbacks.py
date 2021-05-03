@@ -1,6 +1,9 @@
 import pytorch_lightning as pl
 import json
 import os
+import wandb
+import glob
+from pytorch_lightning.utilities import rank_zero_only
 
 
 class RecordTrainStatus(pl.callbacks.Callback):
@@ -31,5 +34,18 @@ class RecordTrainStatus(pl.callbacks.Callback):
     def on_train_end(self, trainer, pl_module):
         self._write_train_status(trainer, pl_module)
 
+    def on_val_end(self, trainer, pl_module):
+        self._write_train_status(trainer, pl_module)
+
     def on_epoch_end(self, trainer, pl_module):
         self._write_train_status(trainer, pl_module)
+
+
+class WandbFileUploader(pl.callbacks.Callback):
+    def __init__(self, patterns):
+        self.patterns = patterns
+
+    @rank_zero_only
+    def on_epoch_end(self, trainer, pl_module):
+        for pattern in self.patterns:
+            wandb.save(glob_str=pattern, policy='now')

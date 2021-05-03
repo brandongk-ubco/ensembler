@@ -128,14 +128,13 @@ def sample_dataset(dataframe, seed=42):
     return samples
 
 
-def process_split(sample_split, statistics_file):
+def process_split(sample_split, statistics):
 
     test_images = sample_split["test"]
     trainval_images = sample_split["trainval"]
 
-    dataset_df = pd.read_csv(statistics_file)
-    test_df = dataset_df[dataset_df["sample"].isin(test_images)]
-    trainval_df = dataset_df[dataset_df["sample"].isin(trainval_images)]
+    test_df = statistics[statistics["sample"].isin(test_images)]
+    trainval_df = statistics[statistics["sample"].isin(trainval_images)]
 
     assert len(trainval_images) == len(trainval_df)
     assert len(test_images) == len(test_df)
@@ -154,3 +153,39 @@ def process_split(sample_split, statistics_file):
     val_images = val_df["sample"].tolist()
     train_images = train_df["sample"].tolist()
     return train_images, val_images, test_images
+
+
+def repeat_infrequent_classes(images, statistics):
+    image_df = statistics[statistics["sample"].isin(images)]
+    class_names = statistics.columns[2:].tolist()
+    output_df = image_df.copy(deep=True)
+
+    been_repeated = []
+
+    while True:
+        counts = output_df.astype(bool).sum(axis=0)[2:]
+        percentage = counts / counts.max()
+        percentage = percentage.sort_values(
+            ascending=True).reset_index().rename(columns={
+                "index": "class_name",
+                0: "sampled_percentage"
+            })
+        smallest_class = percentage.iloc[0]
+        class_name = smallest_class["class_name"]
+        sampled_percentage = smallest_class["sampled_percentage"]
+        if sampled_percentage >= 0.2 or class_name in been_repeated:
+            break
+        been_repeated.append(class_name)
+        repeats = int(1 / sampled_percentage)
+        print("Including class {} for {} repeats".format(class_name, repeats))
+        for i in range(repeats):
+            class_rows = image_df[image_df[class_name] > 0].copy(deep=True)
+            output_df = output_df.append(class_rows, ignore_index=True)
+
+    print("Repeating increased dataset size from {} to {}".format(
+        len(image_df), len(output_df)))
+
+    counts = output_df.astype(bool).sum(axis=0)[2:]
+
+    print("Train Class Count After Repeats: {}".format(counts))
+    return output_df["sample"].tolist()

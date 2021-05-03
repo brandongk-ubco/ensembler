@@ -4,7 +4,7 @@ import torch
 import numpy as np
 import os
 from matplotlib import pyplot as plt
-from ensembler.losses import FocalLoss, SoftBCELoss
+from ensembler.losses import FocalLoss, SoftBCELoss, TverskyLoss
 from ensembler.utils import crop_image_only_outside
 from ensembler.aggregators import harmonize_batch
 
@@ -20,19 +20,23 @@ class Segmenter(pl.LightningModule):
         self.batch_size = self.hparams["batch_size"]
         self.batch_loss_multiplier = self.hparams["batch_loss_multiplier"]
         self.focal_loss_multiplier = self.hparams["focal_loss_multiplier"]
-        self.bce_loss_multiplier = self.hparams["bce_loss_multiplier"]
-        self.dice_loss_multiplier = self.hparams["dice_loss_multiplier"]
+        self.focal_loss_gamma = self.hparams["focal_loss_gamma"]
         self.weight_decay = self.hparams["weight_decay"]
         self.learning_rate = self.hparams["learning_rate"]
         self.min_learning_rate = self.hparams["min_learning_rate"]
         self.train_batches_to_write = self.hparams["train_batches_to_write"]
         self.val_batches_to_write = self.hparams["val_batches_to_write"]
+        self.final_activation = self.hparams["final_activation"]
+        self.tversky_loss_multiplier = self.hparams["tversky_loss_multiplier"]
+        self.tversky_loss_alpha = self.hparams["tversky_loss_alpha"]
+        self.tversky_loss_beta = self.hparams["tversky_loss_beta"]
+        self.tversky_loss_gamma = self.hparams["tversky_loss_gamma"]
         self.dataset = dataset
         self.val_data = val_data
         self.train_data = train_data
         self.test_data = test_data
 
-        self.intensity = 255 // self.dataset.num_classes
+        self.intensity = 255 // (self.dataset.num_classes + 1)
 
         self.model = self.get_model()
 
@@ -42,14 +46,25 @@ class Segmenter(pl.LightningModule):
                             type=str,
                             default="efficientnet-b3")
         parser.add_argument('--depth', type=int, default=5)
-        parser.add_argument('--focal_loss_multiplier', type=float, default=0.)
-        parser.add_argument('--dice_loss_multiplier', type=float, default=0.)
-        parser.add_argument('--bce_loss_multiplier', type=float, default=1.)
+
+        parser.add_argument('--focal_loss_multiplier', type=float, default=1.)
+        parser.add_argument('--focal_loss_gamma', type=float, default=2.)
+
+        parser.add_argument('--tversky_loss_multiplier',
+                            type=float,
+                            default=1.)
+        parser.add_argument('--tversky_loss_alpha', type=float,
+                            default=0.5)  # Penalty for False Positives
+        parser.add_argument('--tversky_loss_beta', type=float,
+                            default=2)  # Penalty for False Negative
+        parser.add_argument('--tversky_loss_gamma', type=float, default=2)
+
         parser.add_argument('--weight_decay', type=float, default=0)
         parser.add_argument('--learning_rate', type=float, default=1e-4)
         parser.add_argument('--min_learning_rate', type=float, default=1e-7)
         parser.add_argument('--train_batches_to_write', type=int, default=1)
         parser.add_argument('--val_batches_to_write', type=int, default=1)
+        parser.add_argument('--final_activation', type=str, default=None)
 
     def get_model(self):
         model = smp.Unet(encoder_name=self.encoder_name,
@@ -57,7 +72,7 @@ class Segmenter(pl.LightningModule):
                          encoder_depth=self.depth,
                          in_channels=3,
                          classes=self.dataset.num_classes,
-                         activation="softmax2d")
+                         activation=self.final_activation)
         model = torch.nn.Sequential(
             torch.nn.Conv2d(self.dataset.num_channels, 3, (1, 1)),
             torch.nn.BatchNorm2d(3), model)
@@ -68,10 +83,12 @@ class Segmenter(pl.LightningModule):
                   y,
                   weights=None,
                   metric=smp.utils.metrics.IoU(threshold=0.5),
-                  dim=0):
+                  dim=1):
+
         results = torch.empty(y_hat.shape[dim],
                               dtype=y_hat.dtype,
                               device=self.device)
+
         for i in torch.tensor(range(y_hat.shape[dim]),
                               dtype=torch.long,
                               device=self.device):
@@ -82,7 +99,7 @@ class Segmenter(pl.LightningModule):
         if weights is not None:
             results = results * weights
 
-        return results.mean()
+        return results
 
     def sample_loss(self, y_hat, y, base_multiplier=1.):
 
@@ -90,77 +107,60 @@ class Segmenter(pl.LightningModule):
                                dtype=y_hat.dtype,
                                device=self.device)
 
-        focal_loss = self.classwise(y_hat,
-                                    y,
-                                    metric=FocalLoss("binary",
-                                                     from_logits=False),
-                                    weights=weights,
-                                    dim=1)
+        loss_values = {}
 
-        dice_loss = self.classwise(y_hat,
-                                   y,
-                                   metric=smp.losses.DiceLoss(
-                                       "binary", from_logits=False),
-                                   weights=weights,
-                                   dim=1)
+        if self.focal_loss_multiplier > 0:
+            loss_values[
+                "focal_loss"] = base_multiplier * self.focal_loss_multiplier * self.classwise(
+                    y_hat,
+                    y,
+                    metric=FocalLoss("binary",
+                                     from_logits=True,
+                                     gamma=self.focal_loss_gamma),
+                    weights=weights,
+                    dim=1).mean()
 
-        bce_loss = self.classwise(y_hat,
-                                  y,
-                                  metric=SoftBCELoss(),
-                                  weights=weights,
-                                  dim=1)
+        if self.tversky_loss_multiplier > 0:
+            loss_values[
+                "tversky_loss"] = base_multiplier * self.tversky_loss_multiplier * self.classwise(
+                    y_hat,
+                    y,
+                    metric=TverskyLoss(alpha=self.tversky_loss_alpha,
+                                       beta=self.tversky_loss_beta,
+                                       gamma=self.tversky_loss_gamma,
+                                       from_logits=True),
+                    weights=weights,
+                    dim=1).mean()
 
-        weighted_bce_loss = base_multiplier * self.bce_loss_multiplier * bce_loss
-        weighted_focal_loss = base_multiplier * self.focal_loss_multiplier * focal_loss
-        weighted_dice_loss = base_multiplier * self.dice_loss_multiplier * dice_loss
-
-        weighted_loss_values = {
-            "bce_loss": weighted_bce_loss,
-            "focal_loss": weighted_focal_loss,
-            "dice_loss": weighted_dice_loss
-        }
-
-        unweighted_loss_values = {
-            "bce_loss": bce_loss,
-            "focal_loss": focal_loss,
-            "dice_loss": dice_loss
-        }
-
-        return weighted_loss_values, unweighted_loss_values
+        return loss_values
 
     def loss(self, y_hat, y, validation=False):
 
+        prefix = "val_" if validation else ""
+
         if not validation or self.batch_loss_multiplier == 0:
-            weighted_loss_values, unweighted_loss_values = self.sample_loss(
-                y_hat.clone(), y.clone())
+            loss_values = self.sample_loss(y_hat.clone(), y.clone())
 
-            for k, v in unweighted_loss_values.items():
-                self.log("unweighted_{}".format(k), v)
+            for k, v in loss_values.items():
+                self.log("{}{}".format(prefix, k), v)
 
-            for k, v in weighted_loss_values.items():
-                self.log(k, v, prog_bar=True)
-
-            loss = torch.stack(list(weighted_loss_values.values())).sum()
+            loss = torch.stack(list(loss_values.values())).sum()
 
         if self.batch_loss_multiplier > 0:
             y_hat_batch, y_batch = self.combine_batch(y_hat, y)
 
-            weighted_batch_loss_values, unweighted_batch_loss_values = self.sample_loss(
+            loss_values = self.sample_loss(
                 y_hat_batch,
                 y_batch,
                 base_multiplier=1. + self.batch_loss_multiplier
                 if validation else self.batch_loss_multiplier)
 
-            for k, v in unweighted_batch_loss_values.items():
-                self.log("unweighted_batch_loss_{}".format(k), v)
+            for k, v in loss_values.items():
+                self.log("{}batch_loss_{}".format(prefix, k), v)
 
-            for k, v in weighted_batch_loss_values.items():
-                self.log("batch_loss_{}".format(k), v)
+            batch_loss = torch.stack(list(loss_values.values())).sum()
 
-            batch_loss = torch.stack(list(
-                weighted_batch_loss_values.values())).sum()
-
-            self.log("batch_loss", batch_loss, prog_bar=True)
+            self.log("{}batch_loss".format(prefix), batch_loss, prog_bar=True)
 
             if validation:
                 loss = batch_loss
@@ -192,8 +192,27 @@ class Segmenter(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         x, y = batch
+
+        self.log_dict(dict(
+            zip([
+                "{}_observation_ratio".format(n) for n in self.dataset.classes
+            ],
+                y.sum(dim=(0, 2, 3)) / torch.numel(y) *
+                self.dataset.num_classes)),
+                      on_step=False,
+                      on_epoch=True)
+
+        self.log_dict(dict(
+            zip([
+                "{}_observation_frequency".format(n)
+                for n in self.dataset.classes
+            ], y.amax(dim=(0, 2, 3)))),
+                      on_step=False,
+                      on_epoch=True)
+
         y_hat = self(x)
         loss = self.loss(y_hat, y)
+        self.log("train_loss", loss, on_step=True, on_epoch=False)
         self.write_predictions(x,
                                y,
                                y_hat,
@@ -243,6 +262,8 @@ class Segmenter(pl.LightningModule):
 
         loss = self.loss(y_hat, y, validation=True)
 
+        self.log_dict({"val_loss": loss}, prog_bar=True)
+
         if self.batch_loss_multiplier > 0:
             y_hat, y = self.combine_batch(y_hat, y)
 
@@ -253,9 +274,38 @@ class Segmenter(pl.LightningModule):
                                prefix="val",
                                batches_to_write=self.val_batches_to_write)
 
-        iou = self.classwise(y_hat, y)
+        metrics = {
+            "iou":
+            smp.utils.metrics.IoU(threshold=0.5),
+            "f1":
+            smp.utils.metrics.Fscore(threshold=0.5),
+            "accuracy":
+            smp.utils.metrics.Accuracy(threshold=0.5),
+            "recall":
+            smp.utils.metrics.Recall(threshold=0.5),
+            "precision":
+            smp.utils.metrics.Precision(threshold=0.5),
+            "prediction_ratio ":
+            lambda y_hat, y: (y_hat > 0.5).sum() / torch.numel(y_hat)
+        }
 
-        self.log_dict({"val_loss": loss, "val_iou": iou}, prog_bar=True)
+        metric_results = {}
+
+        for metric, metric_func in metrics.items():
+            result = self.classwise(y_hat, y, dim=1, metric=metric_func)
+
+            self.log_dict(
+                dict(
+                    zip([
+                        "{}_val_{}".format(n, metric)
+                        for n in self.dataset.classes
+                    ], result)))
+            metric_results[metric] = result.mean()
+
+        self.log_dict(
+            dict(
+                zip(["val_{}".format(n) for n in metric_results.keys()],
+                    metric_results.values())))
 
     def test_step(self, batch, batch_idx):
         x, y = batch
@@ -283,10 +333,9 @@ class Segmenter(pl.LightningModule):
             np.savez_compressed(outfile, predicted_mask=prediction)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.SGD(self.parameters(),
-                                    lr=self.learning_rate,
-                                    weight_decay=self.weight_decay,
-                                    momentum=0.9)
+        optimizer = torch.optim.Adam(self.parameters(),
+                                     lr=self.learning_rate,
+                                     weight_decay=self.weight_decay)
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             patience=self.patience,
@@ -347,12 +396,12 @@ class Segmenter(pl.LightningModule):
 
             mask = y[i, :, :, :]
             mask = mask.numpy().transpose(1, 2, 0)
-            mask_img = np.argmax(mask, axis=2) * self.intensity
+            mask_img = (np.argmax(mask, axis=2) + 1) * self.intensity
 
             predicted_mask = y_hat[i, :, :, :]
             predicted_mask = predicted_mask.numpy().transpose(1, 2, 0)
-            predicted_mask_img = np.argmax(predicted_mask,
-                                           axis=2) * self.intensity
+            predicted_mask_img = (np.argmax(predicted_mask, axis=2) +
+                                  1) * self.intensity
 
             row_start, row_end, col_start, col_end = crop_image_only_outside(
                 img)
