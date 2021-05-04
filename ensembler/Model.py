@@ -4,9 +4,10 @@ import torch
 import numpy as np
 import os
 from matplotlib import pyplot as plt
-from ensembler.losses import FocalLoss, SoftBCELoss, TverskyLoss
+from ensembler.losses import FocalLoss, TverskyLoss
 from ensembler.utils import crop_image_only_outside
 from ensembler.aggregators import harmonize_batch
+from segmentation_models_pytorch.utils.metrics import IoU, Precision, Recall, Fscore, Accuracy
 
 
 class Segmenter(pl.LightningModule):
@@ -56,7 +57,7 @@ class Segmenter(pl.LightningModule):
         parser.add_argument('--tversky_loss_alpha', type=float,
                             default=0.5)  # Penalty for False Positives
         parser.add_argument('--tversky_loss_beta', type=float,
-                            default=2)  # Penalty for False Negative
+                            default=1)  # Penalty for False Negative
         parser.add_argument('--tversky_loss_gamma', type=float, default=2)
 
         parser.add_argument('--weight_decay', type=float, default=0)
@@ -78,12 +79,7 @@ class Segmenter(pl.LightningModule):
             torch.nn.BatchNorm2d(3), model)
         return model
 
-    def classwise(self,
-                  y_hat,
-                  y,
-                  weights=None,
-                  metric=smp.utils.metrics.IoU(threshold=0.5),
-                  dim=1):
+    def classwise(self, y_hat, y, metric, weights=None, dim=1):
 
         results = torch.empty(y_hat.shape[dim],
                               dtype=y_hat.dtype,
@@ -110,27 +106,36 @@ class Segmenter(pl.LightningModule):
         loss_values = {}
 
         if self.focal_loss_multiplier > 0:
+            focal_loss = self.classwise(
+                y_hat,
+                y,
+                metric=lambda y_hat, y: torch.tensor(
+                    0, dtype=y.dtype, requires_grad=y.requires_grad)
+                if not y.max() > 0 else FocalLoss(
+                    "binary", from_logits=True, gamma=self.focal_loss_gamma)
+                (y_hat, y),
+                weights=weights,
+                dim=1)
+
             loss_values[
-                "focal_loss"] = base_multiplier * self.focal_loss_multiplier * self.classwise(
-                    y_hat,
-                    y,
-                    metric=FocalLoss("binary",
-                                     from_logits=True,
-                                     gamma=self.focal_loss_gamma),
-                    weights=weights,
-                    dim=1).mean()
+                "focal_loss"] = base_multiplier * self.focal_loss_multiplier * focal_loss[
+                    focal_loss > -1].mean()
 
         if self.tversky_loss_multiplier > 0:
+            tversky_loss = self.classwise(y_hat,
+                                          y,
+                                          metric=lambda y_hat, y: -1
+                                          if not y.max() > 0 else TverskyLoss(
+                                              alpha=self.tversky_loss_alpha,
+                                              beta=self.tversky_loss_beta,
+                                              gamma=self.tversky_loss_gamma,
+                                              from_logits=True)(y_hat, y),
+                                          weights=weights,
+                                          dim=1)
+
             loss_values[
-                "tversky_loss"] = base_multiplier * self.tversky_loss_multiplier * self.classwise(
-                    y_hat,
-                    y,
-                    metric=TverskyLoss(alpha=self.tversky_loss_alpha,
-                                       beta=self.tversky_loss_beta,
-                                       gamma=self.tversky_loss_gamma,
-                                       from_logits=True),
-                    weights=weights,
-                    dim=1).mean()
+                "tversky_loss"] = base_multiplier * self.tversky_loss_multiplier * tversky_loss[
+                    tversky_loss > -1].mean()
 
         return loss_values
 
@@ -276,15 +281,20 @@ class Segmenter(pl.LightningModule):
 
         metrics = {
             "iou":
-            smp.utils.metrics.IoU(threshold=0.5),
+            lambda y_hat, y: -1
+            if not y.max() > 0 else IoU(threshold=0.5)(y_hat, y),
             "f1":
-            smp.utils.metrics.Fscore(threshold=0.5),
+            lambda y_hat, y: -1
+            if not y.max() > 0 else Fscore(threshold=0.5)(y_hat, y),
             "accuracy":
-            smp.utils.metrics.Accuracy(threshold=0.5),
+            lambda y_hat, y: -1
+            if not y.max() > 0 else Accuracy(threshold=0.5)(y_hat, y),
             "recall":
-            smp.utils.metrics.Recall(threshold=0.5),
+            lambda y_hat, y: -1
+            if not y.max() > 0 else Recall(threshold=0.5)(y_hat, y),
             "precision":
-            smp.utils.metrics.Precision(threshold=0.5),
+            lambda y_hat, y: -1
+            if not y.max() > 0 else Precision(threshold=0.5)(y_hat, y),
             "prediction_ratio ":
             lambda y_hat, y: (y_hat > 0.5).sum() / torch.numel(y_hat)
         }
@@ -294,13 +304,14 @@ class Segmenter(pl.LightningModule):
         for metric, metric_func in metrics.items():
             result = self.classwise(y_hat, y, dim=1, metric=metric_func)
 
-            self.log_dict(
-                dict(
-                    zip([
-                        "{}_val_{}".format(n, metric)
-                        for n in self.dataset.classes
-                    ], result)))
-            metric_results[metric] = result.mean()
+            results_list = list(
+                zip([
+                    "{}_val_{}".format(n, metric) for n in self.dataset.classes
+                ], result))
+            results_list = [r for r in results_list if r[1] >= 0]
+            self.log_dict(dict(results_list))
+
+            metric_results[metric] = result[result >= 0].mean()
 
         self.log_dict(
             dict(
