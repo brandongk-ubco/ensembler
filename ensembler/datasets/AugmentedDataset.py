@@ -4,6 +4,7 @@ import random
 from ensembler.utils import crop_image_only_outside
 from math import ceil
 from functools import lru_cache
+from multiprocessing import Lock
 
 
 class AugmentedDataset:
@@ -129,6 +130,9 @@ class DatasetAugmenter(AugmentedDataset):
         return image, mask
 
 
+mutex = Lock()
+
+
 class RepeatedBatchDatasetAugmenter(AugmentedDataset):
     def __init__(self,
                  dataset,
@@ -165,7 +169,8 @@ class RepeatedBatchDatasetAugmenter(AugmentedDataset):
 
         img_idx = repeat_idx // 4
 
-        image, mask = self.get_dataset_img(self.data_map[img_idx])
+        with mutex:
+            image, mask = self.get_dataset_img(self.data_map[img_idx])
 
         image = image.transpose(2, 0, 1)
         mask = mask.transpose(2, 0, 1)
@@ -220,7 +225,8 @@ class BatchDatasetAugmenter(AugmentedDataset):
         img_idx = idx // 4
         flip_idx = idx % 4
 
-        image, mask = self.get_dataset_img(self.data_map[img_idx])
+        with mutex:
+            image, mask = self.get_dataset_img(self.data_map[img_idx])
 
         image = image.transpose(2, 0, 1)
         mask = mask.transpose(2, 0, 1)

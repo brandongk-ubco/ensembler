@@ -20,6 +20,7 @@ class Segmenter(pl.LightningModule):
         self.depth = self.hparams["depth"]
         self.batch_size = self.hparams["batch_size"]
         self.batch_loss_multiplier = self.hparams["batch_loss_multiplier"]
+        self.base_loss_multiplier = self.hparams["base_loss_multiplier"]
         self.focal_loss_multiplier = self.hparams["focal_loss_multiplier"]
         self.focal_loss_gamma = self.hparams["focal_loss_gamma"]
         self.weight_decay = self.hparams["weight_decay"]
@@ -65,7 +66,7 @@ class Segmenter(pl.LightningModule):
         parser.add_argument('--min_learning_rate', type=float, default=1e-7)
         parser.add_argument('--train_batches_to_write', type=int, default=1)
         parser.add_argument('--val_batches_to_write', type=int, default=1)
-        parser.add_argument('--final_activation', type=str, default=None)
+        parser.add_argument('--final_activation', type=str, default="sigmoid")
 
     def get_model(self):
         model = smp.Unet(encoder_name=self.encoder_name,
@@ -112,7 +113,7 @@ class Segmenter(pl.LightningModule):
                 metric=lambda y_hat, y: torch.tensor(
                     0, dtype=y.dtype, requires_grad=y.requires_grad)
                 if not y.max() > 0 else FocalLoss(
-                    "binary", from_logits=True, gamma=self.focal_loss_gamma)
+                    "binary", from_logits=False, gamma=self.focal_loss_gamma)
                 (y_hat, y),
                 weights=weights,
                 dim=1)
@@ -129,7 +130,7 @@ class Segmenter(pl.LightningModule):
                                               alpha=self.tversky_loss_alpha,
                                               beta=self.tversky_loss_beta,
                                               gamma=self.tversky_loss_gamma,
-                                              from_logits=True)(y_hat, y),
+                                              from_logits=False)(y_hat, y),
                                           weights=weights,
                                           dim=1)
 
@@ -143,22 +144,27 @@ class Segmenter(pl.LightningModule):
 
         prefix = "val_" if validation else ""
 
-        if not validation or self.batch_loss_multiplier == 0:
-            loss_values = self.sample_loss(y_hat.clone(), y.clone())
+        loss = torch.tensor(0., dtype=y.dtype, device=y.device)
+
+        if self.base_loss_multiplier > 0. and (
+                not validation or self.batch_loss_multiplier == 0):
+            loss_values = self.sample_loss(
+                y_hat.clone(),
+                y.clone(),
+                base_multiplier=self.base_loss_multiplier)
 
             for k, v in loss_values.items():
                 self.log("{}{}".format(prefix, k), v)
 
-            loss = torch.stack(list(loss_values.values())).sum()
+            loss += torch.stack(list(loss_values.values())).sum()
 
         if self.batch_loss_multiplier > 0:
             y_hat_batch, y_batch = self.combine_batch(y_hat, y)
 
-            loss_values = self.sample_loss(
-                y_hat_batch,
-                y_batch,
-                base_multiplier=1. + self.batch_loss_multiplier
-                if validation else self.batch_loss_multiplier)
+            loss_values = self.sample_loss(y_hat_batch,
+                                           y_batch,
+                                           base_multiplier=1. if validation
+                                           else self.batch_loss_multiplier)
 
             for k, v in loss_values.items():
                 self.log("{}batch_loss_{}".format(prefix, k), v)
@@ -267,7 +273,7 @@ class Segmenter(pl.LightningModule):
 
         loss = self.loss(y_hat, y, validation=True)
 
-        self.log_dict({"val_loss": loss}, prog_bar=True)
+        self.log_dict({"val_loss": loss})
 
         if self.batch_loss_multiplier > 0:
             y_hat, y = self.combine_batch(y_hat, y)

@@ -10,7 +10,6 @@ classes = [
 
 num_classes = len(classes)
 loss_weights = [1.] * num_classes
-loss_weights[0] = 0.
 num_channels = 3
 
 

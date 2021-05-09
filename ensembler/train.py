@@ -12,7 +12,8 @@ description = "Train a model."
 
 
 def add_argparse_args(parser):
-    parser.add_argument('--batch_loss_multiplier', type=float, default=0.)
+    parser.add_argument('--batch_loss_multiplier', type=float, default=1.)
+    parser.add_argument('--base_loss_multiplier', type=float, default=0.)
     parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--num_workers',
                         type=int,
@@ -57,7 +58,9 @@ def execute(args):
     except pl.utilities.exceptions.MisconfigurationException:
         pass
 
-    wandb_logger = WandbLogger(project=dict_args["dataset_name"])
+    wandb_logger = WandbLogger(project=dict_args["dataset_name"],
+                               entity='acislab',
+                               name='batch-loss-only')
 
     dataset = Datasets.get(dict_args["dataset_name"])
 
@@ -77,6 +80,6 @@ def execute(args):
         accumulate_grad_batches=dict_args["accumulate_grad_batches"],
         logger=wandb_logger,
         move_metrics_to_cpu=True,
-        limit_train_batches=min(len(train_data), 500))
+        limit_train_batches=min(len(train_data), 2000))
 
     trainer.fit(model(dataset, train_data, val_data, test_data, **dict_args))

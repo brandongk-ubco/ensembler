@@ -21,13 +21,9 @@ def harmonize_batch(y_hat,
     y[2, :, :, :] = torch.flip(y[2, :, :, :], [2])
     y[3, :, :, :] = torch.flip(y[3, :, :, :], [1, 2])
 
-    eps = torch.finfo(y.dtype).eps
-    assert torch.all(y[0, :, :, :] - y[1, :, :, :] <= eps)
-    assert torch.all(y[0, :, :, :] - y[2, :, :, :] <= eps)
-    assert torch.all(y[0, :, :, :] - y[3, :, :, :] <= eps)
-    assert torch.all(y[1, :, :, :] - y[0, :, :, :] <= eps)
-    assert torch.all(y[2, :, :, :] - y[0, :, :, :] <= eps)
-    assert torch.all(y[3, :, :, :] - y[0, :, :, :] <= eps)
+    assert torch.allclose(y[1, :, :, :], y[0, :, :, :])
+    assert torch.allclose(y[2, :, :, :], y[0, :, :, :])
+    assert torch.allclose(y[3, :, :, :], y[0, :, :, :])
 
     y_hat = reduction(y_hat)
     y = y[0, :, :, :]
