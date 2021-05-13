@@ -1,0 +1,1 @@
+python -m ensembler cityscapes predict baseline

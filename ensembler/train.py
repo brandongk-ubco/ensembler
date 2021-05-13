@@ -12,8 +12,8 @@ description = "Train a model."
 
 
 def add_argparse_args(parser):
-    parser.add_argument('--batch_loss_multiplier', type=float, default=0.)
-    parser.add_argument('--base_loss_multiplier', type=float, default=1.)
+    parser.add_argument('--batch_loss_multiplier', type=float, default=1.)
+    parser.add_argument('--base_loss_multiplier', type=float, default=0.)
     parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--num_workers',
                         type=int,
@@ -21,7 +21,7 @@ def add_argparse_args(parser):
                                                os.cpu_count() - 1)),
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
-    parser.add_argument('--accumulate_grad_batches', type=int, default=6)
+    parser.add_argument('--accumulate_grad_batches', type=int, default=3)
     parser.add_argument('--patch_height', type=int, default=512)
     parser.add_argument('--patch_width', type=int, default=512)
     parser = model.add_model_specific_args(parser)
@@ -80,6 +80,6 @@ def execute(args):
         accumulate_grad_batches=dict_args["accumulate_grad_batches"],
         logger=wandb_logger,
         move_metrics_to_cpu=True,
-        limit_train_batches=min(len(train_data), 1000))
+        limit_train_batches=min(len(train_data), 2000))
 
     trainer.fit(model(dataset, train_data, val_data, test_data, **dict_args))

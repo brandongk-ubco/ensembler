@@ -20,16 +20,21 @@ def execute(args):
 
     base_dir = os.path.abspath(".")
 
-    model_dir = os.path.join(base_dir, "lightning_logs", dict_args["version"])
+    log_dir = os.path.join(base_dir, "wandb", dict_args["version"], "files")
 
-    hparams_file = os.path.join(model_dir, "hparams.yaml")
+    hparams_file = os.path.join(log_dir, "config.yaml")
     with open(hparams_file, "r") as hf:
         hparams = yaml.load(hf)
+    del hparams["_wandb"]
+    del hparams["wandb_version"]
+
+    hparams = dict([(k, v["value"]) for k, v in hparams.items()])
 
     hparams.update(dict_args)
+    run_dir = os.path.join(log_dir, dict_args["dataset_name"])
 
     checkpoints = glob.glob(
-        os.path.join(model_dir, "checkpoints", "epoch=*.ckpt"))
+        os.path.join(run_dir, "*", "checkpoints", "epoch=*.ckpt"))
 
     assert len(checkpoints) > 0
     checkpoint_scores = [

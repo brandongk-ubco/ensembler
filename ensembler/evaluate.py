@@ -19,17 +19,6 @@ def add_argparse_args(parser):
     return parser
 
 
-def to_one_hot(mask, num_classes):
-
-    label_mask = np.zeros((mask.shape[0], mask.shape[1], num_classes),
-                          dtype=np.float32)
-
-    for clazz in range(num_classes):
-        label_mask[:, :, clazz][mask == clazz] = 1
-
-    return label_mask
-
-
 def evaluate(y_hat, y):
 
     class_exists = np.max(y) > 0
@@ -132,8 +121,10 @@ def evaluate_prediction(idx, loader, image_names, predictions_dir, threshold,
 
 def get_reducer(batch_loss):
     if batch_loss:
+        print("Using noisy-or aggregation")
         return lambda y: 1 - np.prod(1 - y, axis=0)
     else:
+        print("Using average aggregation")
         return lambda y: np.mean(y, axis=0)
 
 
@@ -168,17 +159,19 @@ def execute(args):
 
     samples = list(range(0, len(test_data), 4))
     image_names = test_data.dataset.get_image_names()
+    reducer = get_reducer(hparams["batch_loss_multiplier"] > 0.)
 
+    print("Evaluating Predictions")
     rows = []
-    for result in mapper(
-            partial(
-                evaluate_prediction,
-                loader=test_data,
-                image_names=image_names,
-                predictions_dir=predictions_dir,
-                threshold=hparams["threshold"],
-                reducer=get_reducer(hparams["batch_loss_multiplier"] == 0.),
-                dataset=dataset), samples):
+    for result in mapper(partial(evaluate_prediction,
+                                 loader=test_data,
+                                 image_names=image_names,
+                                 predictions_dir=predictions_dir,
+                                 threshold=hparams["threshold"],
+                                 reducer=reducer,
+                                 dataset=dataset),
+                         samples,
+                         num_cpus=dict_args["num_workers"]):
         rows += result
     df = pd.DataFrame(rows)
     df.to_csv(os.path.join(model_dir, "metrics.csv"), index=False)

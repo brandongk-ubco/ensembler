@@ -20,7 +20,8 @@ class Segmenter(pl.LightningModule):
         self.depth = self.hparams["depth"]
         self.batch_size = self.hparams["batch_size"]
         self.batch_loss_multiplier = self.hparams["batch_loss_multiplier"]
-        self.base_loss_multiplier = self.hparams["base_loss_multiplier"]
+        self.base_loss_multiplier = self.hparams.get("base_loss_multiplier",
+                                                     1.)
         self.focal_loss_multiplier = self.hparams["focal_loss_multiplier"]
         self.focal_loss_gamma = self.hparams["focal_loss_gamma"]
         self.weight_decay = self.hparams["weight_decay"]
@@ -29,6 +30,8 @@ class Segmenter(pl.LightningModule):
         self.train_batches_to_write = self.hparams["train_batches_to_write"]
         self.val_batches_to_write = self.hparams["val_batches_to_write"]
         self.final_activation = self.hparams["final_activation"]
+        if self.final_activation == 'None':
+            self.final_activation = None
         self.tversky_loss_multiplier = self.hparams["tversky_loss_multiplier"]
         self.tversky_loss_alpha = self.hparams["tversky_loss_alpha"]
         self.tversky_loss_beta = self.hparams["tversky_loss_beta"]
@@ -40,12 +43,7 @@ class Segmenter(pl.LightningModule):
 
         self.intensity = 255 // (self.dataset.num_classes + 1)
 
-        self.models = torch.nn.ModuleList([
-            self.get_model(),
-            self.get_model(),
-            self.get_model(),
-            self.get_model()
-        ])
+        self.model = self.get_model()
 
     @staticmethod
     def add_model_specific_args(parser):
@@ -75,7 +73,7 @@ class Segmenter(pl.LightningModule):
 
     def get_model(self):
         model = smp.Unet(encoder_name=self.encoder_name,
-                         encoder_weights=None,
+                         encoder_weights="imagenet",
                          encoder_depth=self.depth,
                          in_channels=3,
                          classes=self.dataset.num_classes,
@@ -194,14 +192,14 @@ class Segmenter(pl.LightningModule):
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_data,
-                                           batch_size=1,
+                                           batch_size=4,
                                            num_workers=self.num_workers,
                                            shuffle=False,
                                            drop_last=False)
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.test_data,
-                                           batch_size=1,
+                                           batch_size=4,
                                            num_workers=self.num_workers,
                                            shuffle=False,
                                            drop_last=False)
@@ -226,7 +224,7 @@ class Segmenter(pl.LightningModule):
                       on_step=False,
                       on_epoch=True)
 
-        y_hat = self(x, log_prefix="train")
+        y_hat = self(x)
         loss = self.loss(y_hat, y)
         self.log("train_loss", loss, on_step=True, on_epoch=False)
         self.write_predictions(x,
@@ -239,21 +237,7 @@ class Segmenter(pl.LightningModule):
         return loss
 
     def forward(self, x, log_prefix=None):
-        y_hats = []
-        for model in self.models:
-            y_hat = model(x)
-            assert torch.max(y_hat) >= 0
-            assert torch.max(y_hat) <= 1
-            y_hats.append(y_hat)
-        y_hats = torch.stack(y_hats)
-        if log_prefix:
-            # stds = self.classwise(y_hat, y, dim=1, metric=metric_func)
-            self.log("{}_prediction_variance".format(log_prefix),
-                     torch.std(y_hats, dim=0).mean())
-        y_hat = 1 - torch.prod(1 - y_hats, dim=0)
-        assert torch.max(y_hat) >= 0
-        assert torch.max(y_hat) <= 1
-        return y_hat
+        return self.model(x)
 
     def combine_batch(self, y_hat, y):
         assert torch.max(y_hat) >= 0
@@ -288,7 +272,7 @@ class Segmenter(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self(x, log_prefix="val")
+        y_hat = self(x)
 
         loss = self.loss(y_hat, y, validation=True)
 
@@ -346,15 +330,31 @@ class Segmenter(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
+        if self.final_activation is None:
+            y_hat = torch.sigmoid(y_hat)
 
         assert y_hat.shape[0] % 4 == 0
+
+        y[1, :, :, :] = torch.flip(y[1, :, :, :], [1])
+        y[2, :, :, :] = torch.flip(y[2, :, :, :], [2])
+        y[3, :, :, :] = torch.flip(y[3, :, :, :], [1, 2])
 
         y_hat[1, :, :, :] = torch.flip(y_hat[1, :, :, :], [1])
         y_hat[2, :, :, :] = torch.flip(y_hat[2, :, :, :], [2])
         y_hat[3, :, :, :] = torch.flip(y_hat[3, :, :, :], [1, 2])
 
+        assert torch.max(y_hat) >= 0
+        assert torch.max(y_hat) <= 1
+        assert torch.max(y) >= 0
+        assert torch.max(y) <= 1
+
+        assert torch.allclose(y[1, :, :, :], y[0, :, :, :])
+        assert torch.allclose(y[2, :, :, :], y[0, :, :, :])
+        assert torch.allclose(y[3, :, :, :], y[0, :, :, :])
+
         image_names = self.test_data.dataset.get_image_names()
-        outdir = os.path.join(self.logger.save_dir, "predictions")
+        out_dir = self.logger.log_dir
+        outdir = os.path.join(out_dir, "predictions")
         os.makedirs(outdir, exist_ok=True)
 
         image_name = image_names[batch_idx]
