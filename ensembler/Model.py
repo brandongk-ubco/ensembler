@@ -40,7 +40,12 @@ class Segmenter(pl.LightningModule):
 
         self.intensity = 255 // (self.dataset.num_classes + 1)
 
-        self.model = self.get_model()
+        self.models = torch.nn.ModuleList([
+            self.get_model(),
+            self.get_model(),
+            self.get_model(),
+            self.get_model()
+        ])
 
     @staticmethod
     def add_model_specific_args(parser):
@@ -70,7 +75,7 @@ class Segmenter(pl.LightningModule):
 
     def get_model(self):
         model = smp.Unet(encoder_name=self.encoder_name,
-                         encoder_weights="imagenet",
+                         encoder_weights=None,
                          encoder_depth=self.depth,
                          in_channels=3,
                          classes=self.dataset.num_classes,
@@ -189,14 +194,14 @@ class Segmenter(pl.LightningModule):
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_data,
-                                           batch_size=4,
+                                           batch_size=1,
                                            num_workers=self.num_workers,
                                            shuffle=False,
                                            drop_last=False)
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.test_data,
-                                           batch_size=4,
+                                           batch_size=1,
                                            num_workers=self.num_workers,
                                            shuffle=False,
                                            drop_last=False)
@@ -221,7 +226,7 @@ class Segmenter(pl.LightningModule):
                       on_step=False,
                       on_epoch=True)
 
-        y_hat = self(x)
+        y_hat = self(x, log_prefix="train")
         loss = self.loss(y_hat, y)
         self.log("train_loss", loss, on_step=True, on_epoch=False)
         self.write_predictions(x,
@@ -233,8 +238,22 @@ class Segmenter(pl.LightningModule):
 
         return loss
 
-    def forward(self, x):
-        return self.model(x)
+    def forward(self, x, log_prefix=None):
+        y_hats = []
+        for model in self.models:
+            y_hat = model(x)
+            assert torch.max(y_hat) >= 0
+            assert torch.max(y_hat) <= 1
+            y_hats.append(y_hat)
+        y_hats = torch.stack(y_hats)
+        if log_prefix:
+            # stds = self.classwise(y_hat, y, dim=1, metric=metric_func)
+            self.log("{}_prediction_variance".format(log_prefix),
+                     torch.std(y_hats, dim=0).mean())
+        y_hat = 1 - torch.prod(1 - y_hats, dim=0)
+        assert torch.max(y_hat) >= 0
+        assert torch.max(y_hat) <= 1
+        return y_hat
 
     def combine_batch(self, y_hat, y):
         assert torch.max(y_hat) >= 0
@@ -269,7 +288,7 @@ class Segmenter(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self(x)
+        y_hat = self(x, log_prefix="val")
 
         loss = self.loss(y_hat, y, validation=True)
 
