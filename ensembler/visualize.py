@@ -66,9 +66,8 @@ def visualize_prediction(idx, loader, image_names, predictions_dir, threshold,
         view = name.split("_")[-1]
         name = "_".join(name.split("_")[:-1])
 
-        out_image = os.path.join(predictions_dir,
-                                 "{}_{}.png".format(name, view))
-        visualize(out_image, image, mask, predicted_mask)
+        # out_image = os.path.join(predictions_dir, "{}_{}.png".format(name, view))
+        # visualize(out_image, image, mask, predicted_mask)
 
     if len(predicted_results) > 0:
         combined = np.stack(predicted_results)

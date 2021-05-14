@@ -14,7 +14,6 @@ description = "Evaluate the performance of a model."
 
 def add_argparse_args(parser):
     parser.add_argument('version', type=str)
-    parser.add_argument('--threshold', type=float, default=0.5)
     parser.add_argument('--num_workers', type=int, default=os.cpu_count() // 2)
     return parser
 
@@ -161,20 +160,32 @@ def execute(args):
     image_names = test_data.dataset.get_image_names()
     reducer = get_reducer(hparams["batch_loss_multiplier"] > 0.)
 
-    print("Evaluating Predictions")
-    rows = []
-    for result in mapper(partial(evaluate_prediction,
-                                 loader=test_data,
-                                 image_names=image_names,
-                                 predictions_dir=predictions_dir,
-                                 threshold=hparams["threshold"],
-                                 reducer=reducer,
-                                 dataset=dataset),
-                         samples,
-                         num_cpus=dict_args["num_workers"]):
-        rows += result
-    df = pd.DataFrame(rows)
-    df.to_csv(os.path.join(model_dir, "metrics.csv"), index=False)
+    for threshold in [0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99]:
+        print("Evaluating Threshold {}".format(threshold))
 
-    means = df.groupby(by=["class", "view", "in_class"]).mean().reset_index()
-    means.to_csv(os.path.join(model_dir, "mean_metrics.csv"), index=False)
+        train_data, val_data, test_data = dataset.get_dataloaders(
+            os.path.join(hparams["data_dir"], hparams["dataset_name"]),
+            get_augmenters(hparams["batch_loss_multiplier"] > 0),
+            hparams["batch_size"],
+            get_augments(hparams["patch_height"], hparams["patch_width"]))
+
+        rows = []
+        for result in mapper(partial(evaluate_prediction,
+                                     loader=test_data,
+                                     image_names=image_names,
+                                     predictions_dir=predictions_dir,
+                                     threshold=threshold,
+                                     reducer=reducer,
+                                     dataset=dataset),
+                             samples,
+                             num_cpus=dict_args["num_workers"]):
+            rows += result
+        df = pd.DataFrame(rows)
+        df.to_csv(os.path.join(model_dir, "metrics_{}.csv".format(threshold)),
+                  index=False)
+
+        means = df.groupby(
+            by=["class", "view", "in_class"]).mean().reset_index()
+        means.to_csv(os.path.join(model_dir,
+                                  "mean_metrics_{}.csv".format(threshold)),
+                     index=False)
