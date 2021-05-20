@@ -160,32 +160,46 @@ def execute(args):
     image_names = test_data.dataset.get_image_names()
     reducer = get_reducer(hparams["batch_loss_multiplier"] > 0.)
 
-    for threshold in [0.91, 0.92, 0.93, 0.94, 0.95, 0.96, 0.97, 0.98, 0.99]:
-        print("Evaluating Threshold {}".format(threshold))
+    for threshold in [0.5]:
 
-        train_data, val_data, test_data = dataset.get_dataloaders(
-            os.path.join(hparams["data_dir"], hparams["dataset_name"]),
-            get_augmenters(hparams["batch_loss_multiplier"] > 0),
-            hparams["batch_size"],
-            get_augments(hparams["patch_height"], hparams["patch_width"]))
+        evaluation_file = os.path.join(model_dir,
+                                       "metrics_{}.csv".format(threshold))
 
-        rows = []
-        for result in mapper(partial(evaluate_prediction,
-                                     loader=test_data,
-                                     image_names=image_names,
-                                     predictions_dir=predictions_dir,
-                                     threshold=threshold,
-                                     reducer=reducer,
-                                     dataset=dataset),
-                             samples,
-                             num_cpus=dict_args["num_workers"]):
-            rows += result
-        df = pd.DataFrame(rows)
-        df.to_csv(os.path.join(model_dir, "metrics_{}.csv".format(threshold)),
-                  index=False)
+        if os.path.exists(evaluation_file):
+            df = pd.read_csv(evaluation_file)
+        else:
+            print("Evaluating Threshold {}".format(threshold))
+
+            train_data, val_data, test_data = dataset.get_dataloaders(
+                os.path.join(hparams["data_dir"], hparams["dataset_name"]),
+                get_augmenters(hparams["batch_loss_multiplier"] > 0),
+                hparams["batch_size"],
+                get_augments(hparams["patch_height"], hparams["patch_width"]))
+
+            rows = []
+            for result in mapper(partial(evaluate_prediction,
+                                         loader=test_data,
+                                         image_names=image_names,
+                                         predictions_dir=predictions_dir,
+                                         threshold=threshold,
+                                         reducer=reducer,
+                                         dataset=dataset),
+                                 samples,
+                                 num_cpus=dict_args["num_workers"]):
+                rows += result
+            df = pd.DataFrame(rows)
+            df.to_csv(evaluation_file, index=False)
 
         means = df.groupby(
             by=["class", "view", "in_class"]).mean().reset_index()
-        means.to_csv(os.path.join(model_dir,
-                                  "mean_metrics_{}.csv".format(threshold)),
-                     index=False)
+        means["function"] = "mean"
+
+        deviations = df.groupby(
+            by=["class", "view", "in_class"]).std().reset_index()
+        deviations["function"] = "std"
+
+        combined = pd.concat([means, deviations])
+
+        combined.to_csv(os.path.join(
+            model_dir, "combined_metrics_{}.csv".format(threshold)),
+                        index=False)

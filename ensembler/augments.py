@@ -20,7 +20,7 @@ def get_augments(image_height, image_width):
     train_transform = A.Compose([
         A.RandomScale(scale_limit=0.1),
         A.Rotate(limit=10),
-        A.Flip(p=0.75),
+        A.HorizontalFlip(p=0.5),
         # A.ElasticTransform(alpha=20, sigma=20 * 0.05, alpha_affine=20 * 0.03),
         A.OneOf(
             [

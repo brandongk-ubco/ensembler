@@ -47,9 +47,13 @@ def focal_loss(output: torch.Tensor,
         logpt = F.binary_cross_entropy(output, target, reduction="none")
     pt = torch.exp(-logpt)
 
+    density = target.sum() / torch.numel(target)
+    gamma = -torch.log(density) + 1
+    gamma = gamma.clamp_max(2)
+
     # compute the loss
     if reduced_threshold is None:
-        focal_term = (1.0 - pt).pow(gamma)
+        focal_term = 2**gamma * (1.0 - pt).pow(gamma)
     else:
         focal_term = ((1.0 - pt) / reduced_threshold).pow(gamma)
         focal_term[pt < reduced_threshold] = 1

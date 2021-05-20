@@ -12,8 +12,8 @@ description = "Train a model."
 
 
 def add_argparse_args(parser):
-    parser.add_argument('--batch_loss_multiplier', type=float, default=1.)
-    parser.add_argument('--base_loss_multiplier', type=float, default=0.)
+    parser.add_argument('--batch_loss_multiplier', type=float, default=0.)
+    parser.add_argument('--base_loss_multiplier', type=float, default=1.)
     parser.add_argument('--patience', type=int, default=10)
     parser.add_argument('--num_workers',
                         type=int,
@@ -49,6 +49,17 @@ def execute(args):
             save_top_k=1,
             mode="min",
             filename='{epoch}-{val_loss:.6f}-{val_iou:.3f}'),
+        pl.callbacks.ModelCheckpoint(
+            monitor='val_loss',
+            save_top_k=1,
+            mode="min",
+            filename='{epoch}-{val_loss:.6f}-{val_iou:.3f}'),
+        pl.callbacks.ModelCheckpoint(
+            monitor='val_loss',
+            save_top_k=1,
+            mode="min",
+            filename='weights-{epoch}-{val_loss:.6f}-{val_iou:.3f}',
+            save_weights_only=True),
         RecordTrainStatus(),
         WandbFileUploader(["*.png", "trainer.json"])
     ]
@@ -60,7 +71,7 @@ def execute(args):
 
     wandb_logger = WandbLogger(project=dict_args["dataset_name"],
                                entity='acislab',
-                               name='ensembled')
+                               name='efficientnet-b0-adaptive-tversky-loss')
 
     dataset = Datasets.get(dict_args["dataset_name"])
 

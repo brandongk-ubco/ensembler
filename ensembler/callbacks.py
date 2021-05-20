@@ -34,10 +34,7 @@ class RecordTrainStatus(pl.callbacks.Callback):
     def on_train_end(self, trainer, pl_module):
         self._write_train_status(trainer, pl_module)
 
-    def on_val_end(self, trainer, pl_module):
-        self._write_train_status(trainer, pl_module)
-
-    def on_epoch_end(self, trainer, pl_module):
+    def on_epoch_start(self, trainer, pl_module):
         self._write_train_status(trainer, pl_module)
 
 
