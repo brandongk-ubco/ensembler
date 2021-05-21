@@ -46,7 +46,37 @@ class Segmenter(pl.LightningModule):
 
         self.intensity = 255 // (self.dataset.num_classes + 1)
 
-        self.model = self.get_model()
+        self.models = torch.nn.ModuleList([
+            torch.nn.Sequential(
+                torch.nn.Conv2d(self.dataset.num_channels, 3, (1, 1)),
+                torch.nn.BatchNorm2d(3), self.get_model(), torch.nn.Sigmoid()),
+            torch.nn.Sequential(
+                torch.nn.ConvTranspose2d(self.dataset.num_channels,
+                                         3,
+                                         3,
+                                         stride=2,
+                                         padding=1,
+                                         output_padding=1),
+                torch.nn.BatchNorm2d(3), self.get_model(),
+                torch.nn.BatchNorm2d(self.dataset.num_classes),
+                torch.nn.Conv2d(self.dataset.num_classes,
+                                self.dataset.num_classes, (3, 3),
+                                stride=2,
+                                padding=1), torch.nn.Sigmoid()),
+            torch.nn.Sequential(
+                torch.nn.Conv2d(self.dataset.num_channels,
+                                3, (3, 3),
+                                stride=2,
+                                padding=1), torch.nn.BatchNorm2d(3),
+                self.get_model(),
+                torch.nn.BatchNorm2d(self.dataset.num_classes),
+                torch.nn.ConvTranspose2d(self.dataset.num_classes,
+                                         self.dataset.num_classes, (3, 3),
+                                         stride=2,
+                                         padding=1,
+                                         output_padding=1),
+                torch.nn.Sigmoid()),
+        ])
 
     @staticmethod
     def add_model_specific_args(parser):
@@ -84,10 +114,7 @@ class Segmenter(pl.LightningModule):
                          encoder_depth=self.depth,
                          in_channels=3,
                          classes=self.dataset.num_classes,
-                         activation=self.final_activation)
-        model = torch.nn.Sequential(
-            torch.nn.Conv2d(self.dataset.num_channels, 3, (1, 1)),
-            torch.nn.BatchNorm2d(3), model)
+                         activation=None)
         return model
 
     def classwise(self, y_hat, y, metric, weights=None, dim=1):
@@ -246,7 +273,7 @@ class Segmenter(pl.LightningModule):
                       on_step=False,
                       on_epoch=True)
 
-        y_hat = self(x)
+        y_hat = self(x, log_prefix="train")
         loss = self.loss(y_hat, y)
         self.log("train_loss", loss, on_step=True, on_epoch=False)
         self.write_predictions(x,
@@ -259,7 +286,21 @@ class Segmenter(pl.LightningModule):
         return loss
 
     def forward(self, x, log_prefix=None):
-        return self.model(x)
+        y_hats = []
+        for model in self.models:
+            y_hat = model(x)
+            assert torch.max(y_hat) >= 0
+            assert torch.max(y_hat) <= 1
+            y_hats.append(y_hat)
+        y_hats = torch.stack(y_hats)
+        if log_prefix:
+            # stds = self.classwise(y_hat, y, dim=1, metric=metric_func)
+            self.log("{}_prediction_variance".format(log_prefix),
+                     torch.std(y_hats, dim=0).mean())
+        y_hat = 1 - torch.prod(1 - y_hats, dim=0)
+        assert torch.max(y_hat) >= 0
+        assert torch.max(y_hat) <= 1
+        return y_hat
 
     def combine_batch(self, y_hat, y):
         assert torch.max(y_hat) >= 0
@@ -294,7 +335,7 @@ class Segmenter(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self(x)
+        y_hat = self(x, log_prefix="val")
 
         loss = self.loss(y_hat, y, validation=True)
 

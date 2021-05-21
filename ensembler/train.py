@@ -71,7 +71,7 @@ def execute(args):
 
     wandb_logger = WandbLogger(project=dict_args["dataset_name"],
                                entity='acislab',
-                               name='efficientnet-b0-adaptive-tversky-loss')
+                               name='efficientnet-b0-3-models')
 
     dataset = Datasets.get(dict_args["dataset_name"])
 
