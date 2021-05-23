@@ -9,8 +9,7 @@ __all__ = ["FocalLoss"]
 
 def focal_loss(output: torch.Tensor,
                target: torch.Tensor,
-               gamma: float = 2.0,
-               alpha: Optional[float] = 0.25,
+               alpha: Optional[float] = 0.5,
                reduction: str = "mean",
                normalized: bool = False,
                reduced_threshold: Optional[float] = None,
@@ -49,11 +48,11 @@ def focal_loss(output: torch.Tensor,
 
     density = target.sum() / torch.numel(target)
     gamma = -torch.log(density) + 1
-    gamma = gamma.clamp_max(2)
+    gamma = gamma.clamp_max(3)
 
     # compute the loss
     if reduced_threshold is None:
-        focal_term = 2**gamma * (1.0 - pt).pow(gamma)
+        focal_term = (1.0 - pt).pow(gamma)
     else:
         focal_term = ((1.0 - pt) / reduced_threshold).pow(gamma)
         focal_term[pt < reduced_threshold] = 1
@@ -87,19 +86,17 @@ class FocalLoss(smp.losses.FocalLoss):
     def __init__(self,
                  mode: str,
                  alpha: Optional[float] = None,
-                 gamma: Optional[float] = 2.,
                  ignore_index: Optional[int] = None,
                  reduction: Optional[str] = "mean",
                  normalized: bool = False,
                  reduced_threshold: Optional[float] = None,
                  weights=None,
                  from_logits=False):
-        super().__init__(mode, alpha, gamma, ignore_index, reduction,
-                         normalized, reduced_threshold)
+        super().__init__(mode, alpha, ignore_index, reduction, normalized,
+                         reduced_threshold)
 
         self.focal_loss_fn = partial(focal_loss,
                                      alpha=alpha,
-                                     gamma=gamma,
                                      reduced_threshold=reduced_threshold,
                                      reduction=reduction,
                                      normalized=normalized,

@@ -4,11 +4,12 @@ import torch
 import numpy as np
 import os
 from matplotlib import pyplot as plt
-from ensembler.losses import FocalLoss, TverskyLoss, AdaptiveCrossEntropyLoss
+from ensembler.losses import FocalLoss, TverskyLoss
 from ensembler.utils import crop_image_only_outside
 from ensembler.aggregators import harmonize_batch
 from segmentation_models_pytorch.utils.metrics import IoU, Precision, Recall, Fscore, Accuracy
 import pandas as pd
+from torch.optim.swa_utils import AveragedModel, SWALR
 
 
 class Segmenter(pl.LightningModule):
@@ -24,7 +25,6 @@ class Segmenter(pl.LightningModule):
         self.base_loss_multiplier = self.hparams.get("base_loss_multiplier",
                                                      1.)
         self.focal_loss_multiplier = self.hparams["focal_loss_multiplier"]
-        self.focal_loss_gamma = self.hparams["focal_loss_gamma"]
         self.weight_decay = self.hparams["weight_decay"]
         self.learning_rate = self.hparams["learning_rate"]
         self.min_learning_rate = self.hparams["min_learning_rate"]
@@ -34,11 +34,8 @@ class Segmenter(pl.LightningModule):
         if self.final_activation == 'None':
             self.final_activation = None
         self.tversky_loss_multiplier = self.hparams["tversky_loss_multiplier"]
-        # self.tversky_loss_alpha = self.hparams["tversky_loss_alpha"]
-        # self.tversky_loss_beta = self.hparams["tversky_loss_beta"]
-        # self.tversky_loss_gamma = self.hparams["tversky_loss_gamma"]
-        self.adaptive_bce_loss_multiplier = self.hparams[
-            "adaptive_bce_loss_multiplier"]
+        self.loss_alpha = self.hparams["loss_alpha"]
+
         self.dataset = dataset
         self.val_data = val_data
         self.train_data = train_data
@@ -46,37 +43,13 @@ class Segmenter(pl.LightningModule):
 
         self.intensity = 255 // (self.dataset.num_classes + 1)
 
-        self.models = torch.nn.ModuleList([
-            torch.nn.Sequential(
-                torch.nn.Conv2d(self.dataset.num_channels, 3, (1, 1)),
-                torch.nn.BatchNorm2d(3), self.get_model(), torch.nn.Sigmoid()),
-            torch.nn.Sequential(
-                torch.nn.ConvTranspose2d(self.dataset.num_channels,
-                                         3,
-                                         3,
-                                         stride=2,
-                                         padding=1,
-                                         output_padding=1),
-                torch.nn.BatchNorm2d(3), self.get_model(),
-                torch.nn.BatchNorm2d(self.dataset.num_classes),
-                torch.nn.Conv2d(self.dataset.num_classes,
-                                self.dataset.num_classes, (3, 3),
-                                stride=2,
-                                padding=1), torch.nn.Sigmoid()),
-            torch.nn.Sequential(
-                torch.nn.Conv2d(self.dataset.num_channels,
-                                3, (3, 3),
-                                stride=2,
-                                padding=1), torch.nn.BatchNorm2d(3),
-                self.get_model(),
-                torch.nn.BatchNorm2d(self.dataset.num_classes),
-                torch.nn.ConvTranspose2d(self.dataset.num_classes,
-                                         self.dataset.num_classes, (3, 3),
-                                         stride=2,
-                                         padding=1,
-                                         output_padding=1),
-                torch.nn.Sigmoid()),
-        ])
+        self.swa_start = 10
+
+        self.model = torch.nn.Sequential(
+            torch.nn.Conv2d(self.dataset.num_channels, 3, (1, 1)),
+            torch.nn.BatchNorm2d(3), self.get_model(), torch.nn.Sigmoid())
+
+        self.swa_model = AveragedModel(self.model)
 
     @staticmethod
     def add_model_specific_args(parser):
@@ -85,27 +58,19 @@ class Segmenter(pl.LightningModule):
                             default="efficientnet-b0")
         parser.add_argument('--depth', type=int, default=5)
 
-        parser.add_argument('--adaptive_bce_loss_multiplier',
-                            type=float,
-                            default=0.)
-
         parser.add_argument('--focal_loss_multiplier', type=float, default=1.)
-        parser.add_argument('--focal_loss_gamma', type=float, default=2.)
 
         parser.add_argument('--tversky_loss_multiplier',
                             type=float,
                             default=1.)
-        # parser.add_argument('--tversky_loss_alpha', type=float,
-        #                     default=1)  # Penalty for False Positives
-        # parser.add_argument('--tversky_loss_beta', type=float,
-        #                     default=1)  # Penalty for False Negative
-        # parser.add_argument('--tversky_loss_gamma', type=float, default=2.)
 
-        parser.add_argument('--weight_decay', type=float, default=0)
+        parser.add_argument('--loss_alpha', type=float, default=0.5)
+
+        parser.add_argument('--weight_decay', type=float, default=5e-4)
         parser.add_argument('--learning_rate', type=float, default=1e-4)
         parser.add_argument('--min_learning_rate', type=float, default=1e-7)
         parser.add_argument('--train_batches_to_write', type=int, default=1)
-        parser.add_argument('--val_batches_to_write', type=int, default=1)
+        parser.add_argument('--val_batches_to_write', type=int, default=4)
         parser.add_argument('--final_activation', type=str, default="sigmoid")
 
     def get_model(self):
@@ -143,30 +108,17 @@ class Segmenter(pl.LightningModule):
 
         loss_values = {}
 
-        if self.adaptive_bce_loss_multiplier > 0:
-            adaptive_bce_loss = self.classwise(
-                y_hat,
-                y,
-                metric=lambda y_hat, y: torch.tensor(
-                    0, dtype=y.dtype, requires_grad=y.requires_grad)
-                if not y.max() > 0 else AdaptiveCrossEntropyLoss(
-                    from_logits=False)(y_hat, y),
-                weights=weights,
-                dim=1)
-
-            loss_values[
-                "adaptive_bce_loss"] = base_multiplier * self.adaptive_bce_loss_multiplier * adaptive_bce_loss[
-                    adaptive_bce_loss > -1].mean()
-
         if self.focal_loss_multiplier > 0:
             focal_loss = self.classwise(
                 y_hat,
                 y,
                 metric=lambda y_hat, y: torch.tensor(
                     0, dtype=y.dtype, requires_grad=y.requires_grad)
-                if not y.max() > 0 else FocalLoss(
-                    "binary", from_logits=False, gamma=self.focal_loss_gamma)
-                (y_hat, y),
+                if not y.max() > 0 else FocalLoss("binary",
+                                                  from_logits=False,
+                                                  alpha=self.loss_alpha,
+                                                  normalized=True,
+                                                  reduction="sum")(y_hat, y),
                 weights=weights,
                 dim=1)
 
@@ -179,10 +131,7 @@ class Segmenter(pl.LightningModule):
                 y_hat,
                 y,
                 metric=lambda y_hat, y: -1 if not y.max() > 0 else TverskyLoss(
-                    #   alpha=self.tversky_loss_alpha,
-                    #   beta=self.tversky_loss_beta,
-                    # gamma=self.tversky_loss_gamma,
-                    from_logits=False)(y_hat, y),
+                    alpha=self.loss_alpha, from_logits=False)(y_hat, y),
                 weights=weights,
                 dim=1)
 
@@ -286,21 +235,7 @@ class Segmenter(pl.LightningModule):
         return loss
 
     def forward(self, x, log_prefix=None):
-        y_hats = []
-        for model in self.models:
-            y_hat = model(x)
-            assert torch.max(y_hat) >= 0
-            assert torch.max(y_hat) <= 1
-            y_hats.append(y_hat)
-        y_hats = torch.stack(y_hats)
-        if log_prefix:
-            # stds = self.classwise(y_hat, y, dim=1, metric=metric_func)
-            self.log("{}_prediction_variance".format(log_prefix),
-                     torch.std(y_hats, dim=0).mean())
-        y_hat = 1 - torch.prod(1 - y_hats, dim=0)
-        assert torch.max(y_hat) >= 0
-        assert torch.max(y_hat) <= 1
-        return y_hat
+        return self.model(x)
 
     def combine_batch(self, y_hat, y):
         assert torch.max(y_hat) >= 0
@@ -332,6 +267,14 @@ class Segmenter(pl.LightningModule):
         assert torch.max(y_batch) <= 1
 
         return y_hat_batch, y_batch
+
+    def on_train_epoch_end(self, _):
+        if self.trainer.current_epoch > self.swa_start:
+            self.swa_model.update_parameters(self.model)
+            self.swa_scheduler.step()
+            torch.optim.swa_utils.update_bn(self.train_dataloader(),
+                                            self.swa_model,
+                                            device=self.device)
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
@@ -447,12 +390,15 @@ class Segmenter(pl.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(),
                                      lr=self.learning_rate,
                                      weight_decay=self.weight_decay)
+
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             patience=self.patience,
             min_lr=self.min_learning_rate,
             verbose=True,
             mode='min')
+
+        self.swa_scheduler = SWALR(optimizer, swa_lr=0.05)
 
         return {
             "optimizer": optimizer,

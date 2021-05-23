@@ -22,8 +22,8 @@ def add_argparse_args(parser):
     parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
     parser.add_argument('--accumulate_grad_batches', type=int, default=3)
-    parser.add_argument('--patch_height', type=int, default=512)
-    parser.add_argument('--patch_width', type=int, default=512)
+    parser.add_argument('--patch_height', type=int, default=768)
+    parser.add_argument('--patch_width', type=int, default=768)
     parser = model.add_model_specific_args(parser)
     return parser
 
@@ -43,12 +43,8 @@ def execute(args):
         pl.callbacks.EarlyStopping(patience=3 * dict_args["patience"],
                                    monitor='val_loss',
                                    mode='min'),
-        pl.callbacks.LearningRateMonitor(logging_interval='epoch'),
-        pl.callbacks.ModelCheckpoint(
-            monitor='val_loss',
-            save_top_k=1,
-            mode="min",
-            filename='{epoch}-{val_loss:.6f}-{val_iou:.3f}'),
+        pl.callbacks.LearningRateMonitor(logging_interval='epoch',
+                                         log_momentum=True),
         pl.callbacks.ModelCheckpoint(
             monitor='val_loss',
             save_top_k=1,
@@ -61,7 +57,8 @@ def execute(args):
             filename='weights-{epoch}-{val_loss:.6f}-{val_iou:.3f}',
             save_weights_only=True),
         RecordTrainStatus(),
-        WandbFileUploader(["*.png", "trainer.json"])
+        WandbFileUploader(["*.png", "trainer.json"]),
+        # pl.callbacks.ModelPruning("l1_unstructured", amount=0.05)
     ]
 
     try:
@@ -71,7 +68,7 @@ def execute(args):
 
     wandb_logger = WandbLogger(project=dict_args["dataset_name"],
                                entity='acislab',
-                               name='efficientnet-b0-3-models')
+                               name='focal-tversky-loss')
 
     dataset = Datasets.get(dict_args["dataset_name"])
 
@@ -91,6 +88,6 @@ def execute(args):
         accumulate_grad_batches=dict_args["accumulate_grad_batches"],
         logger=wandb_logger,
         move_metrics_to_cpu=True,
-        limit_train_batches=min(len(train_data), 2000))
+    )
 
     trainer.fit(model(dataset, train_data, val_data, test_data, **dict_args))
