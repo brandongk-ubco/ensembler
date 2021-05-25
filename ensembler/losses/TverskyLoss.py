@@ -5,15 +5,15 @@ class TverskyLoss(torch.nn.Module):
     def __init__(
         self,
         smooth=1e-6,
-        alpha=0.5,
         from_logits=True,
+        gamma=2,
         eps: float = 1e-6,
     ):
         super(TverskyLoss, self).__init__()
-        self.alpha = alpha
         self.eps = eps
         self.smooth = smooth
         self.from_logits = from_logits
+        self.gamma = gamma
 
     def forward(self, inputs, targets):
 
@@ -21,24 +21,24 @@ class TverskyLoss(torch.nn.Module):
         inputs = inputs.view(-1)
         targets = targets.view(-1)
 
-        density = targets.sum() / torch.numel(targets)
-        gamma = -torch.log(density) + 1
-        gamma = gamma.clamp_max(3)
+        # density = targets.sum() / torch.numel(targets)
+        # alpha = density.clamp(min=0.25, max=0.75)
+
+        alpha = 0.5
+
+        if self.from_logits:
+            logistic_inputs = torch.sigmoid(inputs)
+        else:
+            logistic_inputs = inputs
 
         # True Positives, False Positives & False Negatives
-        TP = (inputs * targets)
-        FP = ((1 - targets) * inputs)
-        FN = (targets * (1 - inputs))
+        TP = (logistic_inputs * targets).sum()
+        FP = ((1 - targets) * logistic_inputs).sum()
+        FN = (targets * (1 - logistic_inputs)).sum()
 
-        tversky = (TP + self.smooth) / (TP + self.alpha * FP +
-                                        (1 - self.alpha) * FN + self.smooth)
+        tversky = (TP + self.smooth) / (TP + 2 * alpha * FP + 2 *
+                                        (1 - alpha) * FN + self.smooth)
 
-        pt = 1.0 - tversky
+        loss = 1 - tversky
 
-        focal_term = pt.pow(gamma)
-
-        loss = focal_term * pt
-        norm_factor = focal_term.sum().clamp_min(self.eps)
-        loss /= norm_factor
-
-        return loss.sum()
+        return loss**self.gamma

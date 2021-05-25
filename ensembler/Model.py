@@ -34,7 +34,6 @@ class Segmenter(pl.LightningModule):
         if self.final_activation == 'None':
             self.final_activation = None
         self.tversky_loss_multiplier = self.hparams["tversky_loss_multiplier"]
-        self.loss_alpha = self.hparams["loss_alpha"]
 
         self.dataset = dataset
         self.val_data = val_data
@@ -64,9 +63,7 @@ class Segmenter(pl.LightningModule):
                             type=float,
                             default=1.)
 
-        parser.add_argument('--loss_alpha', type=float, default=0.5)
-
-        parser.add_argument('--weight_decay', type=float, default=5e-4)
+        parser.add_argument('--weight_decay', type=float, default=0)
         parser.add_argument('--learning_rate', type=float, default=1e-4)
         parser.add_argument('--min_learning_rate', type=float, default=1e-7)
         parser.add_argument('--train_batches_to_write', type=int, default=1)
@@ -114,11 +111,8 @@ class Segmenter(pl.LightningModule):
                 y,
                 metric=lambda y_hat, y: torch.tensor(
                     0, dtype=y.dtype, requires_grad=y.requires_grad)
-                if not y.max() > 0 else FocalLoss("binary",
-                                                  from_logits=False,
-                                                  alpha=self.loss_alpha,
-                                                  normalized=True,
-                                                  reduction="sum")(y_hat, y),
+                if not y.max() > 0 else FocalLoss("binary", from_logits=False)
+                (y_hat, y),
                 weights=weights,
                 dim=1)
 
@@ -130,8 +124,9 @@ class Segmenter(pl.LightningModule):
             tversky_loss = self.classwise(
                 y_hat,
                 y,
-                metric=lambda y_hat, y: -1 if not y.max() > 0 else TverskyLoss(
-                    alpha=self.loss_alpha, from_logits=False)(y_hat, y),
+                metric=lambda y_hat, y: -1
+                if not y.max() > 0 else TverskyLoss(from_logits=False)
+                (y_hat, y),
                 weights=weights,
                 dim=1)
 

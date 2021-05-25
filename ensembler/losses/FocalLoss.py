@@ -9,12 +9,11 @@ __all__ = ["FocalLoss"]
 
 def focal_loss(output: torch.Tensor,
                target: torch.Tensor,
-               alpha: Optional[float] = 0.5,
                reduction: str = "mean",
                normalized: bool = False,
+               gamma=2,
                reduced_threshold: Optional[float] = None,
                eps: float = 1e-6,
-               weights=None,
                from_logits=False) -> torch.Tensor:
     """Compute binary focal loss between target and output logits.
     See :class:`~pytorch_toolbelt.losses.FocalLoss` for details.
@@ -46,9 +45,8 @@ def focal_loss(output: torch.Tensor,
         logpt = F.binary_cross_entropy(output, target, reduction="none")
     pt = torch.exp(-logpt)
 
-    density = target.sum() / torch.numel(target)
-    gamma = -torch.log(density) + 1
-    gamma = gamma.clamp_max(3)
+    # density = target.sum() / torch.numel(target)
+    # alpha = density.clamp(min=0.25, max=0.75)
 
     # compute the loss
     if reduced_threshold is None:
@@ -59,12 +57,7 @@ def focal_loss(output: torch.Tensor,
 
     loss = focal_term * logpt
 
-    if alpha is not None:
-        loss *= alpha * target + (1 - alpha) * (1 - target)
-
-    if weights is not None:
-        for i, w in enumerate(weights):
-            loss[:, i, ::] *= w
+    # loss *= alpha * target + (1 - alpha) * (1 - target)
 
     loss = loss.view(-1)
 
@@ -85,22 +78,19 @@ def focal_loss(output: torch.Tensor,
 class FocalLoss(smp.losses.FocalLoss):
     def __init__(self,
                  mode: str,
-                 alpha: Optional[float] = None,
                  ignore_index: Optional[int] = None,
                  reduction: Optional[str] = "mean",
                  normalized: bool = False,
+                 gamma=2,
                  reduced_threshold: Optional[float] = None,
-                 weights=None,
                  from_logits=False):
-        super().__init__(mode, alpha, ignore_index, reduction, normalized,
-                         reduced_threshold)
+        super().__init__(mode=mode, ignore_index=ignore_index)
 
         self.focal_loss_fn = partial(focal_loss,
-                                     alpha=alpha,
                                      reduced_threshold=reduced_threshold,
                                      reduction=reduction,
                                      normalized=normalized,
-                                     weights=weights,
+                                     gamma=gamma,
                                      from_logits=from_logits)
 
     def forward(self, y_pred: torch.Tensor,
