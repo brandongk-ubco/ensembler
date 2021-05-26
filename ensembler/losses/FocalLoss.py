@@ -57,7 +57,7 @@ def focal_loss(output: torch.Tensor,
 
     loss = focal_term * logpt
 
-    # loss *= alpha * target + (1 - alpha) * (1 - target)
+    # loss *= 2 * alpha * target + 2 * (1 - alpha) * (1 - target)
 
     loss = loss.view(-1)
 
