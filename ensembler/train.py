@@ -7,6 +7,7 @@ from ensembler.callbacks import RecordTrainStatus, WandbFileUploader
 from ensembler.datasets.AugmentedDataset import RepeatedDatasetAugmenter, DatasetAugmenter, RepeatedBatchDatasetAugmenter, BatchDatasetAugmenter
 from ensembler.datasets import Datasets
 from pytorch_lightning.loggers import WandbLogger
+import torch
 
 description = "Train a model."
 
@@ -19,7 +20,7 @@ def add_argparse_args(parser):
                         type=int,
                         default=os.environ.get("NUM_WORKERS",
                                                os.cpu_count() - 1)),
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--batch_size_per_gpu', type=int, default=8)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
     parser.add_argument('--accumulate_grad_batches', type=int, default=3)
     parser.add_argument('--patch_height', type=int, default=512)
@@ -40,6 +41,9 @@ def get_augmenters(batch_loss):
 def execute(args):
 
     dict_args = vars(args)
+    available_gpus = [
+        torch.cuda.device(i) for i in range(torch.cuda.device_count())
+    ]
 
     callbacks = [
         # pl.callbacks.EarlyStopping(patience=3 * dict_args["patience"],
@@ -72,17 +76,21 @@ def execute(args):
                                entity='acislab',
                                name='cosine-annealing-9-epochs')
 
+    dataset_folder = os.path.join(dict_args["data_dir"],
+                                  dict_args["dataset_name"])
+    augmenters = get_augmenters(dict_args["batch_loss_multiplier"] > 0)
+    augments = get_augments(dict_args["patch_height"],
+                            dict_args["patch_width"])
+
     dataset = Datasets.get(dict_args["dataset_name"])
 
     train_data, val_data, test_data = dataset.get_dataloaders(
-        os.path.join(dict_args["data_dir"], dict_args["dataset_name"]),
-        get_augmenters(dict_args["batch_loss_multiplier"] > 0),
-        dict_args["batch_size"],
-        get_augments(dict_args["patch_height"], dict_args["patch_width"]))
+        dataset_folder, augmenters,
+        dict_args["batch_size_per_gpu"] * len(available_gpus), augments)
 
     trainer = pl.Trainer.from_argparse_args(
         args,
-        gpus=1,
+        gpus=-1,
         callbacks=callbacks,
         min_epochs=dict_args["patience"],
         deterministic=True,
@@ -94,4 +102,8 @@ def execute(args):
         if dict_args["limit_train_batches"] is None else min(
             len(train_data), dict_args["limit_train_batches"]))
 
-    trainer.fit(model(dataset, train_data, val_data, test_data, **dict_args))
+    m = model(dataset, train_data, val_data, test_data,
+              dict_args["batch_size_per_gpu"] * len(available_gpus),
+              **dict_args)
+
+    trainer.fit(m)

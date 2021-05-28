@@ -12,14 +12,15 @@ import pandas as pd
 
 
 class Segmenter(pl.LightningModule):
-    def __init__(self, dataset, train_data, val_data, test_data, **kwargs):
+    def __init__(self, dataset, train_data, val_data, test_data, batch_size,
+                 **kwargs):
         super().__init__()
         self.hparams = kwargs
         self.patience = self.hparams["patience"]
         self.encoder_name = self.hparams["encoder_name"]
         self.num_workers = self.hparams["num_workers"]
         self.depth = self.hparams["depth"]
-        self.batch_size = self.hparams["batch_size"]
+        self.batch_size = batch_size
         self.batch_loss_multiplier = self.hparams["batch_loss_multiplier"]
         self.base_loss_multiplier = self.hparams.get("base_loss_multiplier",
                                                      1.)
