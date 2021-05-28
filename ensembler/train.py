@@ -20,7 +20,7 @@ def add_argparse_args(parser):
                         type=int,
                         default=os.environ.get("NUM_WORKERS",
                                                os.cpu_count() - 1)),
-    parser.add_argument('--batch_size_per_gpu', type=int, default=8)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
     parser.add_argument('--accumulate_grad_batches', type=int, default=3)
     parser.add_argument('--patch_height', type=int, default=512)
@@ -62,8 +62,8 @@ def execute(args):
             mode="min",
             filename='weights-{epoch}-{val_loss:.6f}-{val_iou:.3f}',
             save_weights_only=True),
-        RecordTrainStatus(),
-        WandbFileUploader(["*.png", "trainer.json"]),
+        # RecordTrainStatus(),
+        # WandbFileUploader(["*.png", "trainer.json"]),
         # pl.callbacks.ModelPruning("l1_unstructured", amount=0.05)
     ]
 
@@ -86,7 +86,7 @@ def execute(args):
 
     train_data, val_data, test_data = dataset.get_dataloaders(
         dataset_folder, augmenters,
-        dict_args["batch_size_per_gpu"] * len(available_gpus), augments)
+        dict_args["batch_size"], augments)
 
     trainer = pl.Trainer.from_argparse_args(
         args,
@@ -96,6 +96,7 @@ def execute(args):
         deterministic=True,
         max_epochs=dict_args["max_epochs"],
         accumulate_grad_batches=dict_args["accumulate_grad_batches"],
+        accelerator='ddp',
         logger=wandb_logger,
         move_metrics_to_cpu=True,
         limit_train_batches=len(train_data)
@@ -103,7 +104,6 @@ def execute(args):
             len(train_data), dict_args["limit_train_batches"]))
 
     m = model(dataset, train_data, val_data, test_data,
-              dict_args["batch_size_per_gpu"] * len(available_gpus),
               **dict_args)
 
     trainer.fit(m)

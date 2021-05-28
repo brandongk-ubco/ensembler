@@ -12,7 +12,7 @@ import pandas as pd
 
 
 class Segmenter(pl.LightningModule):
-    def __init__(self, dataset, train_data, val_data, test_data, batch_size,
+    def __init__(self, dataset, train_data, val_data, test_data,
                  **kwargs):
         super().__init__()
         self.hparams = kwargs
@@ -20,7 +20,7 @@ class Segmenter(pl.LightningModule):
         self.encoder_name = self.hparams["encoder_name"]
         self.num_workers = self.hparams["num_workers"]
         self.depth = self.hparams["depth"]
-        self.batch_size = batch_size
+        self.batch_size = self.hparams["batch_size"]
         self.batch_loss_multiplier = self.hparams["batch_loss_multiplier"]
         self.base_loss_multiplier = self.hparams.get("base_loss_multiplier",
                                                      1.)
@@ -216,12 +216,6 @@ class Segmenter(pl.LightningModule):
         y_hat = self(x, log_prefix="train")
         loss = self.loss(y_hat, y)
         self.log("train_loss", loss, on_step=True, on_epoch=False)
-        self.write_predictions(x,
-                               y,
-                               y_hat,
-                               batch_idx,
-                               prefix="train",
-                               batches_to_write=self.train_batches_to_write)
 
         return loss
 
@@ -269,13 +263,6 @@ class Segmenter(pl.LightningModule):
 
         if self.batch_loss_multiplier > 0:
             y_hat, y = self.combine_batch(y_hat, y)
-
-        self.write_predictions(x,
-                               y,
-                               y_hat,
-                               batch_idx,
-                               prefix="val",
-                               batches_to_write=self.val_batches_to_write)
 
         metrics = {
             "iou":
