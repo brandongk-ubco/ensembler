@@ -20,7 +20,7 @@ def add_argparse_args(parser):
                         type=int,
                         default=os.environ.get("NUM_WORKERS",
                                                os.cpu_count() - 1)),
-    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--batch_size_per_gpu', type=int, default=8)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
     parser.add_argument('--accumulate_grad_batches', type=int, default=3)
     parser.add_argument('--patch_height', type=int, default=512)
@@ -84,8 +84,10 @@ def execute(args):
 
     dataset = Datasets.get(dict_args["dataset_name"])
 
+    batch_size = dict_args["batch_size_per_gpu"] * len(available_gpus)
+
     train_data, val_data, test_data = dataset.get_dataloaders(
-        dataset_folder, augmenters, dict_args["batch_size"], augments)
+        dataset_folder, augmenters, batch_size, augments)
 
     trainer = pl.Trainer.from_argparse_args(
         args,
@@ -95,13 +97,14 @@ def execute(args):
         deterministic=True,
         max_epochs=dict_args["max_epochs"],
         accumulate_grad_batches=dict_args["accumulate_grad_batches"],
-        plugins=[pl.plugins.DDPPlugin(find_unused_parameters=True)],
+        accelerator="dp",
         logger=wandb_logger,
         move_metrics_to_cpu=True,
         limit_train_batches=len(train_data)
         if dict_args["limit_train_batches"] is None else min(
             len(train_data), dict_args["limit_train_batches"]))
 
-    m = model(dataset, train_data, val_data, test_data, **dict_args)
+    m = model(dataset, train_data, val_data, test_data, batch_size,
+              **dict_args)
 
     trainer.fit(m)
