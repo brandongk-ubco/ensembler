@@ -12,8 +12,7 @@ import pandas as pd
 
 
 class Segmenter(pl.LightningModule):
-    def __init__(self, dataset, train_data, val_data, test_data,
-                 **kwargs):
+    def __init__(self, dataset, train_data, val_data, test_data, **kwargs):
         super().__init__()
         self.hparams = kwargs
         self.patience = self.hparams["patience"]
@@ -259,7 +258,7 @@ class Segmenter(pl.LightningModule):
 
         loss = self.loss(y_hat, y, validation=True)
 
-        self.log_dict({"val_loss": loss})
+        self.log("val_loss", loss)
 
         if self.batch_loss_multiplier > 0:
             y_hat, y = self.combine_batch(y_hat, y)

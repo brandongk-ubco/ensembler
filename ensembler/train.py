@@ -85,8 +85,7 @@ def execute(args):
     dataset = Datasets.get(dict_args["dataset_name"])
 
     train_data, val_data, test_data = dataset.get_dataloaders(
-        dataset_folder, augmenters,
-        dict_args["batch_size"], augments)
+        dataset_folder, augmenters, dict_args["batch_size"], augments)
 
     trainer = pl.Trainer.from_argparse_args(
         args,
@@ -96,14 +95,13 @@ def execute(args):
         deterministic=True,
         max_epochs=dict_args["max_epochs"],
         accumulate_grad_batches=dict_args["accumulate_grad_batches"],
-        accelerator='ddp',
+        plugins=[pl.plugins.DDPPlugin(find_unused_parameters=True)],
         logger=wandb_logger,
         move_metrics_to_cpu=True,
         limit_train_batches=len(train_data)
         if dict_args["limit_train_batches"] is None else min(
             len(train_data), dict_args["limit_train_batches"]))
 
-    m = model(dataset, train_data, val_data, test_data,
-              **dict_args)
+    m = model(dataset, train_data, val_data, test_data, **dict_args)
 
     trainer.fit(m)
