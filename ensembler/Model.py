@@ -79,11 +79,11 @@ class Segmenter(pl.LightningModule):
 
         results = torch.empty(y_hat.shape[dim],
                               dtype=y_hat.dtype,
-                              device=self.device)
+                              device=y_hat.device)
 
         for i in torch.tensor(range(y_hat.shape[dim]),
                               dtype=torch.long,
-                              device=self.device):
+                              device=y_hat.device):
             y_hat_class = y_hat.index_select(dim, i)
             y_class = y.index_select(dim, i)
             results[i] = metric(y_hat_class, y_class)
@@ -97,7 +97,7 @@ class Segmenter(pl.LightningModule):
 
         weights = torch.tensor(self.dataset.loss_weights,
                                dtype=y_hat.dtype,
-                               device=self.device)
+                               device=y_hat.device)
 
         loss_values = {}
 
@@ -236,7 +236,7 @@ class Segmenter(pl.LightningModule):
 
         y_hat_batch = torch.empty(tuple(new_shape),
                                   dtype=y_hat.dtype,
-                                  device=self.device)
+                                  device=y_hat.device)
         y_batch = torch.empty_like(y_hat_batch)
 
         for batch, idx in enumerate(range(0, y_hat.shape[0], 4)):
