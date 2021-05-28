@@ -2,7 +2,6 @@ import pytorch_lightning as pl
 import json
 import os
 import wandb
-import glob
 from pytorch_lightning.utilities import rank_zero_only
 
 
@@ -18,13 +17,13 @@ class RecordTrainStatus(pl.callbacks.Callback):
                 "min_epochs": trainer.min_epochs,
                 "min_steps": trainer.min_steps,
             },
-            "EarlyStopping": {
-                "best_score": float(trainer.callbacks[0].best_score),
-                "patience": float(trainer.callbacks[0].patience),
-                "wait_count": float(trainer.callbacks[0].wait_count),
-                "stopped_epoch": float(trainer.callbacks[0].stopped_epoch),
-                "min_delta": float(trainer.callbacks[0].min_delta),
-            },
+            # "EarlyStopping": {
+            #     "best_score": float(trainer.callbacks[0].best_score),
+            #     "patience": float(trainer.callbacks[0].patience),
+            #     "wait_count": float(trainer.callbacks[0].wait_count),
+            #     "stopped_epoch": float(trainer.callbacks[0].stopped_epoch),
+            #     "min_delta": float(trainer.callbacks[0].min_delta),
+            # },
             "Scheduler": trainer.lr_schedulers[0]["scheduler"].state_dict()
         }
         with open(os.path.join(trainer.logger.save_dir, "trainer.json"),

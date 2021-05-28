@@ -1,1 +1,1 @@
-python -m ensembler cityscapes train --num_workers 4
+python -m ensembler cityscapes train

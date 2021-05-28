@@ -9,7 +9,6 @@ from ensembler.utils import crop_image_only_outside
 from ensembler.aggregators import harmonize_batch
 from segmentation_models_pytorch.utils.metrics import IoU, Precision, Recall, Fscore, Accuracy
 import pandas as pd
-from torch.optim.swa_utils import AveragedModel, SWALR
 
 
 class Segmenter(pl.LightningModule):
@@ -42,13 +41,9 @@ class Segmenter(pl.LightningModule):
 
         self.intensity = 255 // (self.dataset.num_classes + 1)
 
-        self.swa_start = 10
-
         self.model = torch.nn.Sequential(
             torch.nn.Conv2d(self.dataset.num_channels, 3, (1, 1)),
-            torch.nn.BatchNorm2d(3), self.get_model(), torch.nn.Sigmoid())
-
-        self.swa_model = AveragedModel(self.model)
+            torch.nn.InstanceNorm2d(3), self.get_model(), torch.nn.Sigmoid())
 
     @staticmethod
     def add_model_specific_args(parser):
@@ -64,7 +59,7 @@ class Segmenter(pl.LightningModule):
                             default=1.)
 
         parser.add_argument('--weight_decay', type=float, default=0)
-        parser.add_argument('--learning_rate', type=float, default=1e-4)
+        parser.add_argument('--learning_rate', type=float, default=1e-3)
         parser.add_argument('--min_learning_rate', type=float, default=1e-7)
         parser.add_argument('--train_batches_to_write', type=int, default=1)
         parser.add_argument('--val_batches_to_write', type=int, default=4)
@@ -263,14 +258,6 @@ class Segmenter(pl.LightningModule):
 
         return y_hat_batch, y_batch
 
-    def on_train_epoch_end(self, _):
-        if self.trainer.current_epoch > self.swa_start:
-            self.swa_model.update_parameters(self.model)
-            self.swa_scheduler.step()
-            torch.optim.swa_utils.update_bn(self.train_dataloader(),
-                                            self.swa_model,
-                                            device=self.device)
-
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x, log_prefix="val")
@@ -386,14 +373,10 @@ class Segmenter(pl.LightningModule):
                                      lr=self.learning_rate,
                                      weight_decay=self.weight_decay)
 
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            patience=self.patience,
-            min_lr=self.min_learning_rate,
-            verbose=True,
-            mode='min')
-
-        self.swa_scheduler = SWALR(optimizer, swa_lr=0.05)
+            eta_min=self.min_learning_rate,
+            T_max=self.trainer.max_epochs)
 
         return {
             "optimizer": optimizer,

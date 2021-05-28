@@ -21,8 +21,7 @@ class TverskyLoss(torch.nn.Module):
         inputs = inputs.view(-1)
         targets = targets.view(-1)
 
-        density = targets.sum() / torch.numel(targets)
-        alpha = density.clamp(min=0.25, max=0.75)
+        alpha = 0.5
 
         if self.from_logits:
             logistic_inputs = torch.sigmoid(inputs)

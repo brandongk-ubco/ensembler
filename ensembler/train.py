@@ -19,11 +19,13 @@ def add_argparse_args(parser):
                         type=int,
                         default=os.environ.get("NUM_WORKERS",
                                                os.cpu_count() - 1)),
-    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
     parser.add_argument('--accumulate_grad_batches', type=int, default=3)
-    parser.add_argument('--patch_height', type=int, default=768)
-    parser.add_argument('--patch_width', type=int, default=768)
+    parser.add_argument('--patch_height', type=int, default=512)
+    parser.add_argument('--patch_width', type=int, default=512)
+    parser.add_argument('--limit_train_batches', type=int, default=None)
+    parser.add_argument('--max_epochs', type=int, default=9)
     parser = model.add_model_specific_args(parser)
     return parser
 
@@ -40,9 +42,9 @@ def execute(args):
     dict_args = vars(args)
 
     callbacks = [
-        pl.callbacks.EarlyStopping(patience=3 * dict_args["patience"],
-                                   monitor='val_loss',
-                                   mode='min'),
+        # pl.callbacks.EarlyStopping(patience=3 * dict_args["patience"],
+        #                            monitor='val_loss',
+        #                            mode='min'),
         pl.callbacks.LearningRateMonitor(logging_interval='epoch',
                                          log_momentum=True),
         pl.callbacks.ModelCheckpoint(
@@ -68,7 +70,7 @@ def execute(args):
 
     wandb_logger = WandbLogger(project=dict_args["dataset_name"],
                                entity='acislab',
-                               name='focal-tversky-loss')
+                               name='cosine-annealing-9-epochs')
 
     dataset = Datasets.get(dict_args["dataset_name"])
 
@@ -84,10 +86,12 @@ def execute(args):
         callbacks=callbacks,
         min_epochs=dict_args["patience"],
         deterministic=True,
-        max_epochs=sys.maxsize,
+        max_epochs=dict_args["max_epochs"],
         accumulate_grad_batches=dict_args["accumulate_grad_batches"],
         logger=wandb_logger,
         move_metrics_to_cpu=True,
-    )
+        limit_train_batches=len(train_data)
+        if dict_args["limit_train_batches"] is None else min(
+            len(train_data), dict_args["limit_train_batches"]))
 
     trainer.fit(model(dataset, train_data, val_data, test_data, **dict_args))
