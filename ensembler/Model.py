@@ -136,6 +136,9 @@ class Segmenter(pl.LightningModule):
 
         prefix = "val_" if validation else ""
 
+        on_epoch = validation
+        on_step = not validation
+
         loss = torch.tensor(0., dtype=y.dtype, device=y.device)
 
         if self.base_loss_multiplier > 0. and (
@@ -146,7 +149,7 @@ class Segmenter(pl.LightningModule):
                 base_multiplier=self.base_loss_multiplier)
 
             for k, v in loss_values.items():
-                self.log("{}{}".format(prefix, k), v)
+                self.log("{}{}".format(prefix, k), v, on_step=on_step, on_epoch=on_epoch, sync_dist=True)
 
             loss += torch.stack(list(loss_values.values())).sum()
 
@@ -159,11 +162,11 @@ class Segmenter(pl.LightningModule):
                                            else self.batch_loss_multiplier)
 
             for k, v in loss_values.items():
-                self.log("{}batch_loss_{}".format(prefix, k), v)
+                self.log("{}batch_loss_{}".format(prefix, k), v, on_step=on_step, on_epoch=on_epoch, sync_dist=True)
 
             batch_loss = torch.stack(list(loss_values.values())).sum()
 
-            self.log("{}batch_loss".format(prefix), batch_loss, prog_bar=True)
+            self.log("{}batch_loss".format(prefix), batch_loss, on_step=on_step, on_epoch=on_epoch, prog_bar=True, sync_dist=True)
 
             if validation:
                 loss = batch_loss
@@ -203,7 +206,7 @@ class Segmenter(pl.LightningModule):
                 y.sum(dim=(0, 2, 3)) / torch.numel(y) *
                 self.dataset.num_classes)),
                       on_step=False,
-                      on_epoch=True)
+                      on_epoch=True, sync_dist=True)
 
         self.log_dict(dict(
             zip([
@@ -211,11 +214,11 @@ class Segmenter(pl.LightningModule):
                 for n in self.dataset.classes
             ], y.amax(dim=(0, 2, 3)))),
                       on_step=False,
-                      on_epoch=True)
+                      on_epoch=True, sync_dist=True)
 
         y_hat = self(x, log_prefix="train")
         loss = self.loss(y_hat, y)
-        self.log("train_loss", loss, on_step=True, on_epoch=False)
+        self.log("train_loss", loss, on_step=True, on_epoch=False, sync_dist=True)
 
         return loss
 
@@ -259,7 +262,7 @@ class Segmenter(pl.LightningModule):
 
         loss = self.loss(y_hat, y, validation=True)
 
-        self.log("val_loss", loss)
+        self.log("val_loss", loss, sync_dist=True)
 
         if self.batch_loss_multiplier > 0:
             y_hat, y = self.combine_batch(y_hat, y)
@@ -312,8 +315,8 @@ class Segmenter(pl.LightningModule):
             df = pd.DataFrame(metric_results)
             df = df.mean(axis=0)
             for k, v in df.iteritems():
-                self.log(k, v)
-            self.log("val_{}".format(metric), df.mean())
+                self.log(k, v, sync_dist=True)
+            self.log("val_{}".format(metric), df.mean(), sync_dist=True)
 
     def test_step(self, batch, batch_idx):
         x, y = batch

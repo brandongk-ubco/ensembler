@@ -27,6 +27,9 @@ def add_argparse_args(parser):
     parser.add_argument('--patch_width', type=int, default=512)
     parser.add_argument('--limit_train_batches', type=int, default=None)
     parser.add_argument('--max_epochs', type=int, default=9)
+    parser.add_argument('--project_name', type=str, default=None)
+    parser.add_argument('--entity', type=str, default=None)
+    parser.add_argument('--name', type=str, default=None)
     parser = model.add_model_specific_args(parser)
     return parser
 
@@ -72,9 +75,11 @@ def execute(args):
     except pl.utilities.exceptions.MisconfigurationException:
         pass
 
-    wandb_logger = WandbLogger(project=dict_args["dataset_name"],
-                               entity='acislab',
-                               name='cosine-annealing-9-epochs')
+    wandb_logger = WandbLogger(
+        project=dict_args["project_name"]
+        if dict_args["project_name"] else dict_args["dataset_name"],
+        entity=dict_args["entity"],
+        name=dict_args["name"])
 
     dataset_folder = os.path.join(dict_args["data_dir"],
                                   dict_args["dataset_name"])
