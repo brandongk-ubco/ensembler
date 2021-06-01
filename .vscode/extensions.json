@@ -4,6 +4,7 @@
     "recommendations": [
         "ms-python.python",
         "eamodio.gitlens",
-        "mikestead.dotenv"
+        "mikestead.dotenv",
+        "ms-python.vscode-pylance"
     ]
 }

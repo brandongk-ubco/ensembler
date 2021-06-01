@@ -134,11 +134,7 @@ class Segmenter(pl.LightningModule):
 
     def loss(self, y_hat, y, validation=False):
 
-        prefix = "val_" if validation else ""
-
-        on_epoch = validation
-        on_step = not validation
-
+        results = {}
         loss = torch.tensor(0., dtype=y.dtype, device=y.device)
 
         if self.base_loss_multiplier > 0. and (
@@ -149,7 +145,7 @@ class Segmenter(pl.LightningModule):
                 base_multiplier=self.base_loss_multiplier)
 
             for k, v in loss_values.items():
-                self.log("{}{}".format(prefix, k), v, on_step=on_step, on_epoch=on_epoch, sync_dist=True)
+                results[k] = v
 
             loss += torch.stack(list(loss_values.values())).sum()
 
@@ -162,18 +158,18 @@ class Segmenter(pl.LightningModule):
                                            else self.batch_loss_multiplier)
 
             for k, v in loss_values.items():
-                self.log("{}batch_loss_{}".format(prefix, k), v, on_step=on_step, on_epoch=on_epoch, sync_dist=True)
-
+                results["batch_loss_{}".format(k)] = v
             batch_loss = torch.stack(list(loss_values.values())).sum()
 
-            self.log("{}batch_loss".format(prefix), batch_loss, on_step=on_step, on_epoch=on_epoch, prog_bar=True, sync_dist=True)
+            results["batch_loss"] = batch_loss
 
             if validation:
                 loss = batch_loss
             else:
                 loss += batch_loss
 
-        return loss
+        results["loss"] = loss
+        return results
 
     def train_dataloader(self):
         return torch.utils.data.DataLoader(self.train_data,
@@ -199,30 +195,60 @@ class Segmenter(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = batch
 
-        self.log_dict(dict(
-            zip([
-                "{}_observation_ratio".format(n) for n in self.dataset.classes
-            ],
-                y.sum(dim=(0, 2, 3)) / torch.numel(y) *
-                self.dataset.num_classes)),
-                      on_step=False,
-                      on_epoch=True, sync_dist=True)
+        results = {}
 
-        self.log_dict(dict(
-            zip([
-                "{}_observation_frequency".format(n)
-                for n in self.dataset.classes
-            ], y.amax(dim=(0, 2, 3)))),
-                      on_step=False,
-                      on_epoch=True, sync_dist=True)
+        results.update(
+            dict(
+                zip([
+                    "{}_observation_ratio".format(n)
+                    for n in self.dataset.classes
+                ],
+                    y.sum(dim=(0, 2, 3)) / torch.numel(y) *
+                    self.dataset.num_classes)))
 
-        y_hat = self(x, log_prefix="train")
+        results.update(
+            dict(
+                zip([
+                    "{}_observation_frequency".format(n)
+                    for n in self.dataset.classes
+                ], y.amax(dim=(0, 2, 3)))))
+
+        results = dict([(k, v.cpu().numpy()) for k, v in results.items()])
+
+        y_hat = self(x)
         loss = self.loss(y_hat, y)
-        self.log("train_loss", loss, on_step=True, on_epoch=False, sync_dist=True)
 
-        return loss
+        component_loss = dict([(k, v.clone().detach().cpu().numpy())
+                               for k, v in loss.items() if k != "loss"])
 
-    def forward(self, x, log_prefix=None):
+        return loss["loss"], component_loss, results
+
+    def training_step_end(self, step_outputs):
+
+        # Hack to handle the single step case
+        if len(step_outputs) == 3 and type(step_outputs[0]) == torch.Tensor:
+            step_outputs = [step_outputs]
+        loss = torch.empty(len(step_outputs),
+                           dtype=step_outputs[0][0].dtype,
+                           device=step_outputs[0][0].device)
+        results = {}
+        for i, (step_loss, step_component_loss,
+                step_metrics) in enumerate(step_outputs):
+            loss[i] = step_loss
+            for loss_name, loss_value in step_component_loss.items():
+                if loss_name not in results:
+                    results[loss_name] = []
+                results[loss_name].append(np.asscalar(loss_value))
+            for metric, metric_results in step_metrics.items():
+                if metric not in results:
+                    results[metric] = []
+                results[metric].append(np.asscalar(metric_results))
+        for metric, metric_results in results.items():
+            self.log(metric, np.asarray(metric_results).mean())
+
+        return loss.mean()
+
+    def forward(self, x):
         return self.model(x)
 
     def combine_batch(self, y_hat, y):
@@ -258,11 +284,9 @@ class Segmenter(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
-        y_hat = self(x, log_prefix="val")
+        y_hat = self(x)
 
         loss = self.loss(y_hat, y, validation=True)
-
-        self.log("val_loss", loss, sync_dist=True)
 
         if self.batch_loss_multiplier > 0:
             y_hat, y = self.combine_batch(y_hat, y)
@@ -293,30 +317,40 @@ class Segmenter(pl.LightningModule):
             result = self.classwise(y_hat, y, dim=1, metric=metric_func)
 
             results_list = list(
-                zip([
-                    "{}_val_{}".format(n, metric) for n in self.dataset.classes
-                ], result))
+                zip(["{}_{}".format(n, metric) for n in self.dataset.classes],
+                    result))
             results_list = [(r[0], np.asscalar(r[1].cpu().numpy()))
                             for r in results_list if r[1] >= 0]
 
             metric_results[metric] = results_list
 
-        return metric_results
+        combined_loss = loss["loss"]
+        component_loss = dict([(k, v.cpu().numpy()) for k, v in loss.items()
+                               if k != "loss"])
+
+        return combined_loss, component_loss, metric_results
 
     def validation_epoch_end(self, validation_step_outputs):
+        loss = torch.empty(len(validation_step_outputs),
+                           dtype=validation_step_outputs[0][0].dtype,
+                           device=validation_step_outputs[0][0].device)
         results = {}
-        for validation_step_output in validation_step_outputs:
-            for metric, metric_results in validation_step_output.items():
-                if metric not in results:
-                    results[metric] = []
-                metric_results = dict(metric_results)
-                results[metric].append(metric_results)
+        for i, (step_loss, step_component_loss,
+                step_metrics) in enumerate(validation_step_outputs):
+            loss[i] = step_loss
+            for loss_name, loss_value in step_component_loss.items():
+                if loss_name not in results:
+                    results[loss_name] = []
+                results[loss_name].append(np.asscalar(loss_value))
+            for metric, metric_results in step_metrics.items():
+                for k, v in metric_results:
+                    if k not in results:
+                        results[k] = []
+                    results[k].append(np.asscalar(v))
         for metric, metric_results in results.items():
-            df = pd.DataFrame(metric_results)
-            df = df.mean(axis=0)
-            for k, v in df.iteritems():
-                self.log(k, v, sync_dist=True)
-            self.log("val_{}".format(metric), df.mean(), sync_dist=True)
+            self.log("val_{}".format(metric),
+                     np.asarray(metric_results).mean())
+        self.log("val_loss", loss.mean())
 
     def test_step(self, batch, batch_idx):
         x, y = batch
@@ -360,9 +394,9 @@ class Segmenter(pl.LightningModule):
             np.savez_compressed(outfile, predicted_mask=prediction)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(),
-                                     lr=self.learning_rate,
-                                     weight_decay=self.weight_decay)
+        optimizer = torch.optim.AdamW(self.parameters(),
+                                      lr=self.learning_rate,
+                                      weight_decay=self.weight_decay)
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,

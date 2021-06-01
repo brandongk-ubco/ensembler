@@ -20,7 +20,7 @@ def add_argparse_args(parser):
                         type=int,
                         default=os.environ.get("NUM_WORKERS",
                                                os.cpu_count() - 1)),
-    parser.add_argument('--batch_size_per_gpu', type=int, default=8)
+    parser.add_argument('--batch_size_per_gpu', type=int, default=10)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
     parser.add_argument('--accumulate_grad_batches', type=int, default=3)
     parser.add_argument('--patch_height', type=int, default=512)
