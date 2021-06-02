@@ -231,12 +231,11 @@ class Segmenter(pl.LightningModule):
         if type(step_outputs) == dict:
             step_outputs = [step_outputs]
 
-        loss = torch.empty(len(step_outputs),
-                           dtype=step_outputs[0]["loss"].dtype,
-                           device=step_outputs[0]["loss"].device)
+        losses = []
+
         results = {}
-        for i, step in enumerate(step_outputs):
-            loss[i] = step["loss"]
+        for step in step_outputs:
+            losses.append(step["loss"])
             step_metrics = step["metrics"]
             for metric, metric_results in step_metrics.items():
                 if metric not in results:
@@ -245,7 +244,7 @@ class Segmenter(pl.LightningModule):
         for metric, metric_results in results.items():
             self.log(metric, np.asarray(metric_results).mean())
 
-        return loss.mean()
+        return torch.stack(losses).mean()
 
     def forward(self, x):
         return self.model(x)
@@ -336,13 +335,12 @@ class Segmenter(pl.LightningModule):
         if type(step_outputs) == dict:
             step_outputs = [step_outputs]
 
-        loss = torch.empty(len(step_outputs),
-                           dtype=step_outputs[0]["loss"].dtype,
-                           device=step_outputs[0]["loss"].device)
+        losses = []
+
         results = {}
 
-        for i, step in enumerate(step_outputs):
-            loss[i] = step["loss"]
+        for step in step_outputs:
+            losses.append(step["loss"])
             step_metrics = step["metrics"]
             for metric, metric_results in step_metrics.items():
                 if metric not in results:
@@ -351,7 +349,7 @@ class Segmenter(pl.LightningModule):
         for metric, metric_results in results.items():
             self.log("val_{}".format(metric),
                      np.asarray(metric_results).mean())
-        self.log("val_loss", loss.mean())
+        self.log("val_loss", torch.stack(losses).mean())
 
     def test_step(self, batch, batch_idx):
         x, y = batch
