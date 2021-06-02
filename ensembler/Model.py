@@ -213,36 +213,31 @@ class Segmenter(pl.LightningModule):
                     for n in self.dataset.classes
                 ], y.amax(dim=(0, 2, 3)))))
 
-        results = dict([(k, v.cpu().numpy()) for k, v in results.items()])
-
         y_hat = self(x)
         loss = self.loss(y_hat, y)
 
-        component_loss = dict([(k, v.clone().detach().cpu().numpy())
-                               for k, v in loss.items() if k != "loss"])
+        results.update(loss)
+        return results
 
-        results.update(component_loss)
-
-        return {"loss": loss["loss"], "metrics": results}
-
-    def training_step_end(self, step_outputs):
+    def training_step_end(self, steps):
 
         # Hack to handle the single step case
-        if type(step_outputs) == dict:
-            step_outputs = [step_outputs]
+        if type(steps) == dict:
+            steps = [steps]
 
         losses = []
 
         results = {}
-        for step in step_outputs:
+        for step in steps:
             losses.append(step["loss"])
-            step_metrics = step["metrics"]
-            for metric, metric_results in step_metrics.items():
+            for metric, metric_results in step.items():
+                if metric == "loss":
+                    continue
                 if metric not in results:
                     results[metric] = []
-                results[metric].append(np.asscalar(metric_results))
+                results[metric].append(metric_results)
         for metric, metric_results in results.items():
-            self.log(metric, np.asarray(metric_results).mean())
+            self.log(metric, torch.stack(metric_results).mean())
 
         return torch.stack(losses).mean()
 
@@ -317,38 +312,34 @@ class Segmenter(pl.LightningModule):
             results_list = list(
                 zip(["{}_{}".format(n, metric) for n in self.dataset.classes],
                     result))
-            results_list = [(r[0], np.asscalar(r[1].cpu().numpy()))
-                            for r in results_list if r[1] >= 0]
+            results_list = [(r[0], r[1]) for r in results_list if r[1] >= 0]
 
             results.update(dict(results_list))
 
-        combined_loss = loss["loss"]
-        component_loss = dict([(k, v.cpu().numpy()) for k, v in loss.items()
-                               if k != "loss"])
+        results.update(loss)
 
-        results.update(component_loss)
+        return results
 
-        return {"loss": combined_loss, "metrics": results}
+    def validation_epoch_end(self, steps):
 
-    def validation_epoch_end(self, step_outputs):
-
-        if type(step_outputs) == dict:
-            step_outputs = [step_outputs]
+        if type(steps) == dict:
+            steps = [steps]
 
         losses = []
 
         results = {}
 
-        for step in step_outputs:
+        for step in steps:
             losses.append(step["loss"])
-            step_metrics = step["metrics"]
-            for metric, metric_results in step_metrics.items():
+            for metric, metric_result in step.items():
+                if metric == "loss":
+                    continue
                 if metric not in results:
                     results[metric] = []
-                results[metric].append(np.asscalar(metric_results))
+                results[metric].append(metric_result)
         for metric, metric_results in results.items():
             self.log("val_{}".format(metric),
-                     np.asarray(metric_results).mean())
+                     torch.stack(metric_results).mean())
         self.log("val_loss", torch.stack(losses).mean())
 
     def test_step(self, batch, batch_idx):
