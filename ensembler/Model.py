@@ -223,7 +223,7 @@ class Segmenter(pl.LightningModule):
 
         results.update(component_loss)
 
-        return {"loss": loss, "metrics": results}
+        return {"loss": loss["loss"], "metrics": results}
 
     def training_step_end(self, step_outputs):
 
