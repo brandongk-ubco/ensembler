@@ -228,8 +228,9 @@ class Segmenter(pl.LightningModule):
     def training_step_end(self, step_outputs):
 
         # Hack to handle the single step case
-        if len(step_outputs) == 1 and type(step_outputs) == dict:
+        if type(step_outputs) == dict:
             step_outputs = [step_outputs]
+
         loss = torch.empty(len(step_outputs),
                            dtype=step_outputs[0]["loss"].dtype,
                            device=step_outputs[0]["loss"].device)
@@ -330,13 +331,17 @@ class Segmenter(pl.LightningModule):
 
         return {"loss": combined_loss, "metrics": results}
 
-    def validation_epoch_end(self, validation_step_outputs):
-        loss = torch.empty(len(validation_step_outputs),
-                           dtype=validation_step_outputs[0]["loss"].dtype,
-                           device=validation_step_outputs[0]["loss"].device)
+    def validation_epoch_end(self, step_outputs):
+
+        if type(step_outputs) == dict:
+            step_outputs = [step_outputs]
+
+        loss = torch.empty(len(step_outputs),
+                           dtype=step_outputs[0]["loss"].dtype,
+                           device=step_outputs[0]["loss"].device)
         results = {}
 
-        for i, step in enumerate(validation_step_outputs):
+        for i, step in enumerate(step_outputs):
             loss[i] = step["loss"]
             step_metrics = step["metrics"]
             for metric, metric_results in step_metrics.items():
