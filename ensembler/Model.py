@@ -222,9 +222,8 @@ class Segmenter(pl.LightningModule):
                                for k, v in loss.items() if k != "loss"])
 
         results.update(component_loss)
-        results["loss"] = loss
 
-        return results
+        return {"loss": loss, "metrics": results}
 
     def training_step_end(self, step_outputs):
 
@@ -328,9 +327,8 @@ class Segmenter(pl.LightningModule):
                                if k != "loss"])
 
         results.update(component_loss)
-        results["loss"] = combined_loss
 
-        return results
+        return {"loss": combined_loss, "metrics": results}
 
     def validation_epoch_end(self, validation_step_outputs):
         loss = torch.empty(len(validation_step_outputs),
