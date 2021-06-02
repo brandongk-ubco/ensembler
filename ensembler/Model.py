@@ -232,8 +232,8 @@ class Segmenter(pl.LightningModule):
         if len(step_outputs) == 2 and type(step_outputs[0]) == torch.Tensor:
             step_outputs = [step_outputs]
         loss = torch.empty(len(step_outputs),
-                           dtype=step_outputs["loss"][0].dtype,
-                           device=step_outputs["loss"][0].device)
+                           dtype=step_outputs[0]["loss"].dtype,
+                           device=step_outputs[0]["loss"].device)
         results = {}
         for i, step in enumerate(step_outputs):
             loss[i] = step["loss"]
@@ -334,8 +334,8 @@ class Segmenter(pl.LightningModule):
 
     def validation_epoch_end(self, validation_step_outputs):
         loss = torch.empty(len(validation_step_outputs),
-                           dtype=validation_step_outputs["loss"][0].dtype,
-                           device=validation_step_outputs["loss"][0].device)
+                           dtype=validation_step_outputs[0]["loss"].dtype,
+                           device=validation_step_outputs[0]["loss"].device)
         results = {}
 
         for i, step in enumerate(validation_step_outputs):
