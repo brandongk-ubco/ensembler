@@ -228,7 +228,7 @@ class Segmenter(pl.LightningModule):
     def training_step_end(self, step_outputs):
 
         # Hack to handle the single step case
-        if len(step_outputs) == 2 and type(step_outputs[0]) == torch.Tensor:
+        if len(step_outputs) == 1 and type(step_outputs) == dict:
             step_outputs = [step_outputs]
         loss = torch.empty(len(step_outputs),
                            dtype=step_outputs[0]["loss"].dtype,
