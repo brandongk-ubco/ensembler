@@ -3,7 +3,7 @@ import sys
 import os
 from ensembler.Model import Segmenter as model
 from ensembler.augments import get_augments
-from ensembler.callbacks import RecordTrainStatus, WandbFileUploader
+# from ensembler.callbacks import RecordTrainStatus, WandbFileUploader
 from ensembler.datasets.AugmentedDataset import RepeatedDatasetAugmenter, DatasetAugmenter, RepeatedBatchDatasetAugmenter, BatchDatasetAugmenter
 from ensembler.datasets import Datasets
 from pytorch_lightning.loggers import WandbLogger
@@ -49,9 +49,9 @@ def execute(args):
     ]
 
     callbacks = [
-        # pl.callbacks.EarlyStopping(patience=3 * dict_args["patience"],
-        #                            monitor='val_loss',
-        #                            mode='min'),
+        pl.callbacks.EarlyStopping(patience=3 * dict_args["patience"],
+                                   monitor='val_loss',
+                                   mode='min'),
         pl.callbacks.LearningRateMonitor(logging_interval='epoch',
                                          log_momentum=True),
         pl.callbacks.ModelCheckpoint(
@@ -100,7 +100,7 @@ def execute(args):
         callbacks=callbacks,
         min_epochs=dict_args["patience"],
         deterministic=True,
-        max_epochs=dict_args["max_epochs"],
+        max_epochs=sys.maxsize,
         accumulate_grad_batches=dict_args["accumulate_grad_batches"],
         accelerator="dp",
         logger=wandb_logger,

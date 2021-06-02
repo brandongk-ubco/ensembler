@@ -1,5 +1,4 @@
 import pytorch_lightning as pl
-import segmentation_models_pytorch as smp
 import torch
 import numpy as np
 import os
@@ -8,7 +7,7 @@ from ensembler.losses import FocalLoss, TverskyLoss
 from ensembler.utils import crop_image_only_outside
 from ensembler.aggregators import harmonize_batch
 from segmentation_models_pytorch.utils.metrics import IoU, Precision, Recall, Fscore, Accuracy
-import pandas as pd
+import monai
 
 
 class Segmenter(pl.LightningModule):
@@ -30,10 +29,8 @@ class Segmenter(pl.LightningModule):
         self.min_learning_rate = self.hparams["min_learning_rate"]
         self.train_batches_to_write = self.hparams["train_batches_to_write"]
         self.val_batches_to_write = self.hparams["val_batches_to_write"]
-        self.final_activation = self.hparams["final_activation"]
-        if self.final_activation == 'None':
-            self.final_activation = None
         self.tversky_loss_multiplier = self.hparams["tversky_loss_multiplier"]
+        self.patience = self.hparams["patience"]
 
         self.dataset = dataset
         self.val_data = val_data
@@ -64,15 +61,19 @@ class Segmenter(pl.LightningModule):
         parser.add_argument('--min_learning_rate', type=float, default=1e-7)
         parser.add_argument('--train_batches_to_write', type=int, default=1)
         parser.add_argument('--val_batches_to_write', type=int, default=4)
-        parser.add_argument('--final_activation', type=str, default="sigmoid")
 
     def get_model(self):
-        model = smp.Unet(encoder_name=self.encoder_name,
-                         encoder_weights="imagenet",
-                         encoder_depth=self.depth,
-                         in_channels=3,
-                         classes=self.dataset.num_classes,
-                         activation=None)
+
+        model = monai.networks.nets.UNet(
+            dimensions=2,
+            in_channels=3,
+            out_channels=self.dataset.num_classes,
+            channels=[40] * 9,
+            strides=[2] * 9,
+            num_res_units=2,
+            act=monai.networks.layers.factories.Act.MEMSWISH,
+            norm=monai.networks.layers.factories.Norm.BATCH)
+
         return model
 
     def classwise(self, y_hat, y, metric, weights=None, dim=1):
@@ -345,8 +346,7 @@ class Segmenter(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        if self.final_activation is None:
-            y_hat = torch.sigmoid(y_hat)
+        y_hat = torch.sigmoid(y_hat)
 
         assert y_hat.shape[0] % 4 == 0
 
@@ -388,10 +388,16 @@ class Segmenter(pl.LightningModule):
                                       lr=self.learning_rate,
                                       weight_decay=self.weight_decay)
 
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        #     optimizer,
+        #     eta_min=self.min_learning_rate,
+        #     T_max=self.trainer.max_epochs)
+
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
-            eta_min=self.min_learning_rate,
-            T_max=self.trainer.max_epochs)
+            min_lr=self.min_learning_rate,
+            patience=self.patience,
+            cooldown=self.patience // 2)
 
         return {
             "optimizer": optimizer,
