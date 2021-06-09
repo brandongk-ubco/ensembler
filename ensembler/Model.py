@@ -8,6 +8,7 @@ from ensembler.utils import crop_image_only_outside
 from ensembler.aggregators import harmonize_batch
 from segmentation_models_pytorch.utils.metrics import IoU, Precision, Recall, Fscore, Accuracy
 import monai
+from ensembler.optim import PolynomialLRDecayWithWarmup
 
 
 class Segmenter(pl.LightningModule):
@@ -19,6 +20,8 @@ class Segmenter(pl.LightningModule):
         self.encoder_name = self.hparams["encoder_name"]
         self.num_workers = self.hparams["num_workers"]
         self.depth = self.hparams["depth"]
+        self.width = self.hparams["width"]
+        self.width_ratio = self.hparams["width_ratio"]
         self.batch_size = batch_size
         self.batch_loss_multiplier = self.hparams["batch_loss_multiplier"]
         self.base_loss_multiplier = self.hparams.get("base_loss_multiplier",
@@ -31,6 +34,11 @@ class Segmenter(pl.LightningModule):
         self.val_batches_to_write = self.hparams["val_batches_to_write"]
         self.tversky_loss_multiplier = self.hparams["tversky_loss_multiplier"]
         self.patience = self.hparams["patience"]
+        self.residual_units = self.hparams["residual_units"]
+        self.learning_rate_decay_power = self.hparams[
+            "learning_rate_decay_power"]
+
+        self.dropout = self.hparams["dropout"]
 
         self.dataset = dataset
         self.val_data = val_data
@@ -48,7 +56,10 @@ class Segmenter(pl.LightningModule):
         parser.add_argument('--encoder_name',
                             type=str,
                             default="efficientnet-b0")
-        parser.add_argument('--depth', type=int, default=5)
+        parser.add_argument('--depth', type=int, default=10)
+        parser.add_argument('--width', type=int, default=40)
+        parser.add_argument('--width_ratio', type=int, default=1.2)
+        parser.add_argument('--dropout', type=float, default=0)
 
         parser.add_argument('--focal_loss_multiplier', type=float, default=1.)
 
@@ -56,21 +67,33 @@ class Segmenter(pl.LightningModule):
                             type=float,
                             default=1.)
 
+        parser.add_argument('--residual_units', type=int, default=4)
         parser.add_argument('--weight_decay', type=float, default=0)
         parser.add_argument('--learning_rate', type=float, default=1e-3)
+        parser.add_argument('--learning_rate_decay_power',
+                            type=float,
+                            default=1.1)
         parser.add_argument('--min_learning_rate', type=float, default=1e-7)
         parser.add_argument('--train_batches_to_write', type=int, default=1)
         parser.add_argument('--val_batches_to_write', type=int, default=4)
 
     def get_model(self):
 
+        channels = [self.width] * self.depth
+        channels = [
+            int(c * self.width_ratio**i) for i, c in enumerate(channels)
+        ]
+
         model = monai.networks.nets.UNet(
             dimensions=2,
             in_channels=3,
             out_channels=self.dataset.num_classes,
-            channels=[40] * 9,
-            strides=[2] * 9,
-            num_res_units=2,
+            channels=channels,
+            strides=[2] * self.depth,
+            num_res_units=self.residual_units,
+            dropout=(monai.networks.layers.factories.Dropout.ALPHADROPOUT, {
+                "p": self.dropout
+            }),
             act=monai.networks.layers.factories.Act.MEMSWISH,
             norm=monai.networks.layers.factories.Norm.BATCH)
 
@@ -194,6 +217,7 @@ class Segmenter(pl.LightningModule):
                                            drop_last=False)
 
     def training_step(self, batch, batch_idx):
+
         x, y = batch
 
         results = {}
@@ -388,21 +412,47 @@ class Segmenter(pl.LightningModule):
                                       lr=self.learning_rate,
                                       weight_decay=self.weight_decay)
 
-        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        steps_per_epoch = self.trainer.limit_train_batches // self.trainer.accumulate_grad_batches
+        epochs = self.trainer.max_epochs
+        total_steps = steps_per_epoch * epochs
+        warmup_steps = total_steps // 10
+
+        # scheduler = torch.optim.lr_scheduler.OneCycleLR(
         #     optimizer,
-        #     eta_min=self.min_learning_rate,
-        #     T_max=self.trainer.max_epochs)
+        #     max_lr=self.learning_rate,
+        #     epochs=self.trainer.max_epochs,
+        #     steps_per_epoch=)
+
+        # scheduler = pl_bolts.optimizers.lr_scheduler.LinearWarmupCosineAnnealingLR(
+        #     optimizer,
+        #     warmup_epochs=warmup_steps,
+        #     max_epochs=total_steps,
+        #     eta_min=self.min_learning_rate)
+
+        # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        #     optimizer, eta_min=self.min_learning_rate, T_max=total_steps)
 
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
-            min_lr=self.min_learning_rate,
             patience=self.patience,
-            cooldown=self.patience // 2)
+            cooldown=self.patience // 2,
+            min_lr=self.min_learning_rate,
+            mode="min")
+
+        # scheduler = PolynomialLRDecayWithWarmup(
+        #     optimizer,
+        #     total_steps=total_steps,
+        #     warmup_steps=warmup_steps,
+        #     min_lr=self.min_learning_rate,
+        #     power=self.learning_rate_decay_power)
 
         return {
             "optimizer": optimizer,
-            "lr_scheduler": scheduler,
-            "monitor": 'val_loss'
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "monitor": "val_loss",
+                # "interval": "step"
+            }
         }
 
     def save_prediction(self, img, mask_img, predicted_mask_img, outfile):

@@ -1,5 +1,5 @@
 {
-    "python.pythonPath": "C:\\Users\\bgk60\\Miniconda3\\envs\\ensembler\\python.exe",
+    "python.pythonPath": "C:\\Users\\brand\\miniconda3\\envs\\ensembler\\python.exe",
     "python.linting.pylintEnabled": false,
     "python.linting.flake8Enabled": true,
     "python.linting.enabled": true,

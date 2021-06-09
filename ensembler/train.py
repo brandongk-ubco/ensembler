@@ -15,18 +15,18 @@ description = "Train a model."
 def add_argparse_args(parser):
     parser.add_argument('--batch_loss_multiplier', type=float, default=0.)
     parser.add_argument('--base_loss_multiplier', type=float, default=1.)
-    parser.add_argument('--patience', type=int, default=10)
+    parser.add_argument('--patience', type=int, default=5)
     parser.add_argument('--num_workers',
                         type=int,
                         default=os.environ.get("NUM_WORKERS",
                                                os.cpu_count() - 1)),
-    parser.add_argument('--batch_size_per_gpu', type=int, default=10)
+    parser.add_argument('--batch_size_per_gpu', type=int, default=30)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
-    parser.add_argument('--accumulate_grad_batches', type=int, default=3)
+    parser.add_argument('--accumulate_grad_batches', type=int, default=1)
     parser.add_argument('--patch_height', type=int, default=512)
     parser.add_argument('--patch_width', type=int, default=512)
     parser.add_argument('--limit_train_batches', type=int, default=None)
-    parser.add_argument('--max_epochs', type=int, default=9)
+    parser.add_argument('--max_epochs', type=int, default=sys.maxsize)
     parser.add_argument('--project_name', type=str, default=None)
     parser.add_argument('--entity', type=str, default=None)
     parser.add_argument('--name', type=str, default=None)
@@ -52,7 +52,7 @@ def execute(args):
         pl.callbacks.EarlyStopping(patience=3 * dict_args["patience"],
                                    monitor='val_loss',
                                    mode='min'),
-        pl.callbacks.LearningRateMonitor(logging_interval='epoch',
+        pl.callbacks.LearningRateMonitor(logging_interval='step',
                                          log_momentum=True),
         pl.callbacks.ModelCheckpoint(
             monitor='val_loss',
@@ -100,14 +100,14 @@ def execute(args):
         callbacks=callbacks,
         min_epochs=dict_args["patience"],
         deterministic=True,
-        max_epochs=sys.maxsize,
+        max_epochs=dict_args["max_epochs"],
         accumulate_grad_batches=dict_args["accumulate_grad_batches"],
         accelerator="dp",
         logger=wandb_logger,
         move_metrics_to_cpu=True,
-        limit_train_batches=len(train_data)
-        if dict_args["limit_train_batches"] is None else min(
-            len(train_data), dict_args["limit_train_batches"]))
+        limit_train_batches=len(train_data) //
+        batch_size if dict_args["limit_train_batches"] is None else min(
+            len(train_data) // batch_size, dict_args["limit_train_batches"]))
 
     m = model(dataset, train_data, val_data, test_data, batch_size,
               **dict_args)
