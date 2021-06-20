@@ -8,7 +8,7 @@ from ensembler.utils import crop_image_only_outside
 from ensembler.aggregators import harmonize_batch
 from segmentation_models_pytorch.utils.metrics import IoU, Precision, Recall, Fscore, Accuracy
 import monai
-from ensembler.optim import PolynomialLRDecayWithWarmup
+from ensembler.optim import PolynomialLRDecayWithWarmup, LinearWarmupCosineAnnealingLR
 
 
 class Segmenter(pl.LightningModule):
@@ -30,6 +30,8 @@ class Segmenter(pl.LightningModule):
         self.weight_decay = self.hparams["weight_decay"]
         self.learning_rate = self.hparams["learning_rate"]
         self.min_learning_rate = self.hparams["min_learning_rate"]
+        self.warmup_epochs = self.hparams["warmup_epochs"]
+        self.cooldown_epochs = self.hparams["cooldown_epochs"]
         self.train_batches_to_write = self.hparams["train_batches_to_write"]
         self.val_batches_to_write = self.hparams["val_batches_to_write"]
         self.tversky_loss_multiplier = self.hparams["tversky_loss_multiplier"]
@@ -67,15 +69,17 @@ class Segmenter(pl.LightningModule):
                             type=float,
                             default=1.)
 
-        parser.add_argument('--residual_units', type=int, default=4)
+        parser.add_argument('--residual_units', type=int, default=2)
         parser.add_argument('--weight_decay', type=float, default=0)
-        parser.add_argument('--learning_rate', type=float, default=1e-3)
-        parser.add_argument('--learning_rate_decay_power',
-                            type=float,
-                            default=1.1)
-        parser.add_argument('--min_learning_rate', type=float, default=1e-7)
+        parser.add_argument('--learning_rate', type=float, default=5e-3)
+        parser.add_argument('--min_learning_rate', type=float, default=3e-4)
         parser.add_argument('--train_batches_to_write', type=int, default=1)
         parser.add_argument('--val_batches_to_write', type=int, default=4)
+        parser.add_argument('--warmup_epochs', type=float, default=1)
+        parser.add_argument('--cooldown_epochs', type=float, default=5)
+        parser.add_argument('--learning_rate_decay_power',
+                            type=float,
+                            default=2.)
 
     def get_model(self):
 
@@ -129,8 +133,7 @@ class Segmenter(pl.LightningModule):
             focal_loss = self.classwise(
                 y_hat,
                 y,
-                metric=lambda y_hat, y: torch.tensor(
-                    0, dtype=y.dtype, requires_grad=y.requires_grad)
+                metric=lambda y_hat, y: -1
                 if not y.max() > 0 else FocalLoss("binary", from_logits=False)
                 (y_hat, y),
                 weights=weights,
@@ -138,7 +141,7 @@ class Segmenter(pl.LightningModule):
 
             loss_values[
                 "focal_loss"] = base_multiplier * self.focal_loss_multiplier * focal_loss[
-                    focal_loss > -1].mean()
+                    focal_loss >= 0]
 
         if self.tversky_loss_multiplier > 0:
             tversky_loss = self.classwise(
@@ -152,8 +155,17 @@ class Segmenter(pl.LightningModule):
 
             loss_values[
                 "tversky_loss"] = base_multiplier * self.tversky_loss_multiplier * tversky_loss[
-                    tversky_loss > -1].mean()
+                    tversky_loss >= 0]
 
+        if self.focal_loss_multiplier > 0 and self.tversky_loss_multiplier > 0:
+            loss_values["combined_loss"] = loss_values["focal_loss"].mean(
+            ) + loss_values["tversky_loss"].mean()
+        elif self.focal_loss_multiplier > 0:
+            loss_values["combined_loss"] = loss_values["focal_loss"].mean()
+        elif self.tversky_loss_multiplier > 0:
+            loss_values["combined_loss"] = loss_values["tversky_loss"].mean()
+        else:
+            loss_values["combined_loss"] = 0
         return loss_values
 
     def loss(self, y_hat, y, validation=False):
@@ -171,7 +183,7 @@ class Segmenter(pl.LightningModule):
             for k, v in loss_values.items():
                 results[k] = v
 
-            loss += torch.stack(list(loss_values.values())).sum()
+            loss = results["combined_loss"]
 
         if self.batch_loss_multiplier > 0:
             y_hat_batch, y_batch = self.combine_batch(y_hat, y)
@@ -182,15 +194,12 @@ class Segmenter(pl.LightningModule):
                                            else self.batch_loss_multiplier)
 
             for k, v in loss_values.items():
-                results["batch_loss_{}".format(k)] = v
-            batch_loss = torch.stack(list(loss_values.values())).sum()
-
-            results["batch_loss"] = batch_loss
+                results["batch_{}".format(k)] = v
 
             if validation:
-                loss = batch_loss
+                loss = results["batch_combined_loss"]
             else:
-                loss += batch_loss
+                loss += results["batch_combined_loss"]
 
         results["loss"] = loss
         return results
@@ -408,50 +417,46 @@ class Segmenter(pl.LightningModule):
             np.savez_compressed(outfile, predicted_mask=prediction)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(),
-                                      lr=self.learning_rate,
-                                      weight_decay=self.weight_decay)
+        optimizer = torch.optim.Adam(self.parameters(),
+                                     lr=self.learning_rate,
+                                     weight_decay=self.weight_decay)
 
         steps_per_epoch = self.trainer.limit_train_batches // self.trainer.accumulate_grad_batches
         epochs = self.trainer.max_epochs
         total_steps = steps_per_epoch * epochs
-        warmup_steps = total_steps // 10
+        warmup_steps = int(self.warmup_epochs * steps_per_epoch)
+        cooldown_steps = int(self.cooldown_epochs * steps_per_epoch)
+        lr_controlled_steps = total_steps - cooldown_steps
 
-        # scheduler = torch.optim.lr_scheduler.OneCycleLR(
-        #     optimizer,
-        #     max_lr=self.learning_rate,
-        #     epochs=self.trainer.max_epochs,
-        #     steps_per_epoch=)
-
-        # scheduler = pl_bolts.optimizers.lr_scheduler.LinearWarmupCosineAnnealingLR(
-        #     optimizer,
-        #     warmup_epochs=warmup_steps,
-        #     max_epochs=total_steps,
-        #     eta_min=self.min_learning_rate)
+        scheduler = LinearWarmupCosineAnnealingLR(
+            optimizer,
+            warmup_epochs=warmup_steps,
+            max_epochs=lr_controlled_steps,
+            eta_min=self.min_learning_rate)
 
         # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         #     optimizer, eta_min=self.min_learning_rate, T_max=total_steps)
 
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer,
-            patience=self.patience,
-            cooldown=self.patience // 2,
-            min_lr=self.min_learning_rate,
-            mode="min")
+        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        #     optimizer,
+        #     patience=self.patience,
+        #     cooldown=self.patience // 2,
+        #     min_lr=self.min_learning_rate,
+        #     mode="min")
 
         # scheduler = PolynomialLRDecayWithWarmup(
         #     optimizer,
         #     total_steps=total_steps,
         #     warmup_steps=warmup_steps,
-        #     min_lr=self.min_learning_rate,
-        #     power=self.learning_rate_decay_power)
+        #     decay_power=self.learning_rate_decay_power,
+        #     min_lr=self.min_learning_rate)
 
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                "monitor": "val_loss",
-                # "interval": "step"
+                # "monitor": "val_loss",
+                "interval": "step"
             }
         }
 

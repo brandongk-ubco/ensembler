@@ -7,15 +7,15 @@ class PolynomialLRDecayWithWarmup(_LRScheduler):
                  optimizer,
                  total_steps,
                  warmup_steps,
+                 decay_power,
                  min_lr=1e-7,
-                 power=2.0,
                  last_epoch: int = -1):
         assert total_steps > 1
         self.total_steps = total_steps
         self.min_lr = min_lr
         self.warmup_steps = warmup_steps
-        self.power = power
         super().__init__(optimizer, last_epoch)
+        self.decay_power = decay_power
 
     def get_lr(self):
 
@@ -36,8 +36,6 @@ class PolynomialLRDecayWithWarmup(_LRScheduler):
             current_step = self.last_epoch - self.warmup_steps
             total_steps = self.total_steps - self.warmup_steps
 
-            return [
-                (base_lr - self.min_lr) *
-                (1 - current_step / total_steps)**(self.power) + self.min_lr
-                for base_lr in self.base_lrs
-            ]
+            return [(base_lr - self.min_lr) *
+                    (1 - current_step / total_steps)**(self.decay_power) +
+                    self.min_lr for base_lr in self.base_lrs]

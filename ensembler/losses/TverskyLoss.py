@@ -6,7 +6,7 @@ class TverskyLoss(torch.nn.Module):
         self,
         smooth=1e-6,
         from_logits=True,
-        gamma=2,
+        gamma=2.,
         eps: float = 1e-6,
     ):
         super(TverskyLoss, self).__init__()

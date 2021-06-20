@@ -63,7 +63,6 @@ class RepeatedDatasetAugmenter(AugmentedDataset):
                  augments=None,
                  preprocessing_transform=None,
                  shuffle=False,
-                 min_train_samples=200,
                  **kwargs):
         super().__init__(dataset, preprocessing_transform, patch_transform,
                          augments)
@@ -72,8 +71,6 @@ class RepeatedDatasetAugmenter(AugmentedDataset):
         self.shuffle = shuffle
         self.augments = augments
         self.repeats = 1
-        if num_elements < min_train_samples:
-            self.repeats = ceil(min_train_samples / num_elements)
 
     def __len__(self):
         return len(self.dataset) * self.repeats
@@ -85,7 +82,7 @@ class RepeatedDatasetAugmenter(AugmentedDataset):
         if repeat_idx == 0 and self.shuffle:
             random.shuffle(self.data_map)
 
-        image, mask = super().__getitem__(self.data_map[idx])
+        image, mask = super().__getitem__(self.data_map[repeat_idx])
 
         image = image.transpose(2, 0, 1)
         mask = mask.transpose(2, 0, 1)

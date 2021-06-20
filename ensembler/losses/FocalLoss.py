@@ -62,7 +62,7 @@ def focal_loss(output: torch.Tensor,
     loss = loss.view(-1)
 
     if normalized:
-        norm_factor = focal_term.sum().clamp_min(eps)
+        norm_factor = focal_term.mean().clamp_min(eps)
         loss /= norm_factor
 
     if reduction == "mean":

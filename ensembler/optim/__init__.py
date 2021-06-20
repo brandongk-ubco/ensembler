@@ -1,3 +1,4 @@
 from .PolynomialLRDecayWithWarmup import PolynomialLRDecayWithWarmup
+from .LinearWarmupCosineAnnealingLR import LinearWarmupCosineAnnealingLR
 
-__all__ = [PolynomialLRDecayWithWarmup]
+__all__ = [PolynomialLRDecayWithWarmup, LinearWarmupCosineAnnealingLR]

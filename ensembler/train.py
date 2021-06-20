@@ -20,13 +20,13 @@ def add_argparse_args(parser):
                         type=int,
                         default=os.environ.get("NUM_WORKERS",
                                                os.cpu_count() - 1)),
-    parser.add_argument('--batch_size_per_gpu', type=int, default=30)
+    parser.add_argument('--batch_size_per_gpu', type=int, default=40)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
     parser.add_argument('--accumulate_grad_batches', type=int, default=1)
     parser.add_argument('--patch_height', type=int, default=512)
     parser.add_argument('--patch_width', type=int, default=512)
     parser.add_argument('--limit_train_batches', type=int, default=None)
-    parser.add_argument('--max_epochs', type=int, default=sys.maxsize)
+    parser.add_argument('--max_epochs', type=int, default=None)
     parser.add_argument('--project_name', type=str, default=None)
     parser.add_argument('--entity', type=str, default=None)
     parser.add_argument('--name', type=str, default=None)
@@ -49,9 +49,6 @@ def execute(args):
     ]
 
     callbacks = [
-        pl.callbacks.EarlyStopping(patience=3 * dict_args["patience"],
-                                   monitor='val_loss',
-                                   mode='min'),
         pl.callbacks.LearningRateMonitor(logging_interval='step',
                                          log_momentum=True),
         pl.callbacks.ModelCheckpoint(
@@ -69,6 +66,12 @@ def execute(args):
         # WandbFileUploader(["*.png", "trainer.json"]),
         # pl.callbacks.ModelPruning("l1_unstructured", amount=0.05)
     ]
+
+    if not dict_args["max_epochs"]:
+        callbacks.append(
+            pl.callbacks.EarlyStopping(patience=3 * dict_args["patience"],
+                                       monitor='val_loss',
+                                       mode='min'))
 
     try:
         callbacks.append(pl.callbacks.GPUStatsMonitor())
@@ -100,7 +103,7 @@ def execute(args):
         callbacks=callbacks,
         min_epochs=dict_args["patience"],
         deterministic=True,
-        max_epochs=dict_args["max_epochs"],
+        max_epochs=dict_args.get("max_epochs", sys.maxsize),
         accumulate_grad_batches=dict_args["accumulate_grad_batches"],
         accelerator="dp",
         logger=wandb_logger,
