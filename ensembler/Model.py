@@ -75,8 +75,8 @@ class Segmenter(pl.LightningModule):
         parser.add_argument('--min_learning_rate', type=float, default=3e-4)
         parser.add_argument('--train_batches_to_write', type=int, default=1)
         parser.add_argument('--val_batches_to_write', type=int, default=4)
-        parser.add_argument('--warmup_epochs', type=float, default=1)
-        parser.add_argument('--cooldown_epochs', type=float, default=5)
+        parser.add_argument('--warmup_epochs', type=float, default=0.05)
+        parser.add_argument('--cooldown_epochs', type=float, default=0.)
         parser.add_argument('--learning_rate_decay_power',
                             type=float,
                             default=2.)
@@ -271,7 +271,10 @@ class Segmenter(pl.LightningModule):
                     results[metric] = []
                 results[metric].append(metric_results)
         for metric, metric_results in results.items():
-            self.log(metric, torch.stack(metric_results).mean())
+            self.log(metric,
+                     torch.stack(metric_results).mean(),
+                     on_step=True,
+                     on_epoch=False)
 
         return torch.stack(losses).mean()
 
