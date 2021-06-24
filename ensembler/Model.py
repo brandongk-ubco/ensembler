@@ -141,7 +141,7 @@ class Segmenter(pl.LightningModule):
 
             loss_values[
                 "focal_loss"] = base_multiplier * self.focal_loss_multiplier * focal_loss[
-                    focal_loss >= 0]
+                    focal_loss >= 0].mean()
 
         if self.tversky_loss_multiplier > 0:
             tversky_loss = self.classwise(
@@ -155,15 +155,15 @@ class Segmenter(pl.LightningModule):
 
             loss_values[
                 "tversky_loss"] = base_multiplier * self.tversky_loss_multiplier * tversky_loss[
-                    tversky_loss >= 0]
+                    tversky_loss >= 0].mean()
 
         if self.focal_loss_multiplier > 0 and self.tversky_loss_multiplier > 0:
-            loss_values["combined_loss"] = loss_values["focal_loss"].mean(
-            ) + loss_values["tversky_loss"].mean()
+            loss_values["combined_loss"] = loss_values[
+                "focal_loss"] + loss_values["tversky_loss"]
         elif self.focal_loss_multiplier > 0:
-            loss_values["combined_loss"] = loss_values["focal_loss"].mean()
+            loss_values["combined_loss"] = loss_values["focal_loss"]
         elif self.tversky_loss_multiplier > 0:
-            loss_values["combined_loss"] = loss_values["tversky_loss"].mean()
+            loss_values["combined_loss"] = loss_values["tversky_loss"]
         else:
             loss_values["combined_loss"] = 0
         return loss_values
