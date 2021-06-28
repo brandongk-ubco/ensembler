@@ -6,7 +6,7 @@ from ensembler.augments import get_augments
 # from ensembler.callbacks import RecordTrainStatus, WandbFileUploader
 from ensembler.datasets.AugmentedDataset import RepeatedDatasetAugmenter, DatasetAugmenter, RepeatedBatchDatasetAugmenter, BatchDatasetAugmenter
 from ensembler.datasets import Datasets
-from pytorch_lightning.loggers import WandbLogger
+from ensembler.loggers import WandbLogger
 import torch
 import wandb
 import signal
@@ -86,7 +86,8 @@ def execute(args):
         entity=dict_args["entity"],
         name=dict_args["name"])
 
-    signal.signal(signal.SIGUSR1, wandb.mark_preempting)
+    if "SIGUSR1" in [f.name for f in (signal.Signals)]:
+        signal.signal(signal.SIGUSR1, wandb.mark_preempting)
 
     dataset_folder = os.path.join(dict_args["data_dir"],
                                   dict_args["dataset_name"])
