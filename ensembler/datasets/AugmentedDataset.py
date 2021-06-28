@@ -70,7 +70,7 @@ class RepeatedDatasetAugmenter(AugmentedDataset):
         self.data_map = list(range(num_elements))
         self.shuffle = shuffle
         self.augments = augments
-        self.repeats = 20
+        self.repeats = 1
 
     def __len__(self):
         return len(self.dataset) * self.repeats

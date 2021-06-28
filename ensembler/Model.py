@@ -60,7 +60,7 @@ class Segmenter(pl.LightningModule):
                             default="efficientnet-b0")
         parser.add_argument('--depth', type=int, default=10)
         parser.add_argument('--width', type=int, default=40)
-        parser.add_argument('--width_ratio', type=int, default=1.2)
+        parser.add_argument('--width_ratio', type=float, default=1.2)
         parser.add_argument('--dropout', type=float, default=0)
 
         parser.add_argument('--focal_loss_multiplier', type=float, default=1.)
@@ -424,28 +424,28 @@ class Segmenter(pl.LightningModule):
                                      lr=self.learning_rate,
                                      weight_decay=self.weight_decay)
 
-        steps_per_epoch = self.trainer.limit_train_batches // self.trainer.accumulate_grad_batches
-        epochs = self.trainer.max_epochs
-        total_steps = steps_per_epoch * epochs
-        warmup_steps = int(self.warmup_epochs * steps_per_epoch)
-        cooldown_steps = int(self.cooldown_epochs * steps_per_epoch)
-        lr_controlled_steps = total_steps - cooldown_steps
+        # steps_per_epoch = self.trainer.limit_train_batches // self.trainer.accumulate_grad_batches
+        # epochs = self.trainer.max_epochs
+        # total_steps = steps_per_epoch * epochs
+        # warmup_steps = int(self.warmup_epochs * steps_per_epoch)
+        # cooldown_steps = int(self.cooldown_epochs * steps_per_epoch)
+        # lr_controlled_steps = total_steps - cooldown_steps
 
-        scheduler = LinearWarmupCosineAnnealingLR(
-            optimizer,
-            warmup_epochs=warmup_steps,
-            max_epochs=lr_controlled_steps,
-            eta_min=self.min_learning_rate)
+        # scheduler = LinearWarmupCosineAnnealingLR(
+        #     optimizer,
+        #     warmup_epochs=warmup_steps,
+        #     max_epochs=lr_controlled_steps,
+        #     eta_min=self.min_learning_rate)
 
         # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         #     optimizer, eta_min=self.min_learning_rate, T_max=total_steps)
 
-        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        #     optimizer,
-        #     patience=self.patience,
-        #     cooldown=self.patience // 2,
-        #     min_lr=self.min_learning_rate,
-        #     mode="min")
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            patience=self.patience,
+            cooldown=self.patience // 2,
+            min_lr=self.min_learning_rate,
+            mode="min")
 
         # scheduler = PolynomialLRDecayWithWarmup(
         #     optimizer,
@@ -458,8 +458,8 @@ class Segmenter(pl.LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": {
                 "scheduler": scheduler,
-                # "monitor": "val_loss",
-                "interval": "step"
+                "monitor": "val_loss",
+                # "interval": "step"
             }
         }
 

@@ -20,13 +20,13 @@ def add_argparse_args(parser):
                         type=int,
                         default=os.environ.get("NUM_WORKERS",
                                                os.cpu_count() - 1)),
-    parser.add_argument('--batch_size_per_gpu', type=int, default=40)
+    parser.add_argument('--batch_size_per_gpu', type=int, default=20)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
     parser.add_argument('--accumulate_grad_batches', type=int, default=1)
     parser.add_argument('--patch_height', type=int, default=512)
     parser.add_argument('--patch_width', type=int, default=512)
     parser.add_argument('--limit_train_batches', type=int, default=None)
-    parser.add_argument('--max_epochs', type=int, default=1)
+    parser.add_argument('--max_epochs', type=int, default=None)
     parser.add_argument('--project_name', type=str, default=None)
     parser.add_argument('--entity', type=str, default=None)
     parser.add_argument('--name', type=str, default=None)

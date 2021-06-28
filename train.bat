@@ -1,1 +1,1 @@
-python -m ensembler cityscapes train --max_epochs 1
+python -m ensembler cityscapes train
