@@ -15,11 +15,11 @@ parameters:
   residual_units:
     values:
       - 2
-      - 4
+      - 3
   width_ratio:
     values:
       - 1.0
-      - 1.5
+      - 1.2
   width:
     values:
       - 40
