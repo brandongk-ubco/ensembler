@@ -9,6 +9,7 @@ from ensembler.aggregators import harmonize_batch
 from segmentation_models_pytorch.utils.metrics import IoU, Precision, Recall, Fscore, Accuracy
 import monai
 from ensembler.optim import PolynomialLRDecayWithWarmup, LinearWarmupCosineAnnealingLR
+from ensembler.Activations import Activations
 
 
 class Segmenter(pl.LightningModule):
@@ -41,6 +42,7 @@ class Segmenter(pl.LightningModule):
             "learning_rate_decay_power"]
 
         self.dropout = self.hparams["dropout"]
+        self.activation = Activations.get(self.hparams["activation"])
 
         self.dataset = dataset
         self.val_data = val_data
@@ -80,6 +82,10 @@ class Segmenter(pl.LightningModule):
         parser.add_argument('--learning_rate_decay_power',
                             type=float,
                             default=2.)
+        parser.add_argument('--activation',
+                            type=str,
+                            choices=Activations.choices(),
+                            default="relu")
 
     def get_model(self):
 
@@ -98,7 +104,7 @@ class Segmenter(pl.LightningModule):
             dropout=(monai.networks.layers.factories.Dropout.ALPHADROPOUT, {
                 "p": self.dropout
             }),
-            act=monai.networks.layers.factories.Act.MEMSWISH,
+            act=self.activation,
             norm=monai.networks.layers.factories.Norm.BATCH)
 
         return model

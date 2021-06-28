@@ -1,12 +1,11 @@
 from enum import Enum
-import torch.nn as nn
+from monai.networks.layers.factories import Act
 
 
 class Activations(Enum):
     leaky_relu = "leaky_relu"
     relu = "relu"
-    elu = "elu"
-    linear = "linear"
+    tanh = "tanh"
     swish = "swish"
 
     def __str__(self):
@@ -21,14 +20,12 @@ class Activations(Enum):
 
     def get(activation):
         if activation == "leaky_relu":
-            return nn.LeakyReLU
+            return Act.LEAKYRELU
         if activation == "relu":
-            return nn.ReLU
-        if activation == "elu":
-            return nn.ELU
-        if activation == "linear":
-            return nn.Identity
+            return Act.RELU
+        if activation == "tanh":
+            return Act.TANH
         if activation == "swish":
-            return nn.SiLU
+            return Act.MEMSWISH
 
         raise ValueError("Activation %s not defined" % activation)

@@ -1,1 +1,1 @@
-python -m ensembler cityscapes train
+python -m ensembler cityscapes train --activation tanh
