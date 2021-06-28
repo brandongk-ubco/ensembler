@@ -8,6 +8,8 @@ from ensembler.datasets.AugmentedDataset import RepeatedDatasetAugmenter, Datase
 from ensembler.datasets import Datasets
 from pytorch_lightning.loggers import WandbLogger
 import torch
+import wandb
+import signal
 
 description = "Train a model."
 
@@ -83,6 +85,8 @@ def execute(args):
         if dict_args["project_name"] else dict_args["dataset_name"],
         entity=dict_args["entity"],
         name=dict_args["name"])
+
+    signal.signal(signal.SIGUSR1, wandb.mark_preempting)
 
     dataset_folder = os.path.join(dict_args["data_dir"],
                                   dict_args["dataset_name"])
