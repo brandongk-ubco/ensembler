@@ -112,7 +112,7 @@ def execute(args):
         deterministic=True,
         max_epochs=dict_args.get("max_epochs", sys.maxsize),
         accumulate_grad_batches=dict_args["accumulate_grad_batches"],
-        accelerator="dp",
+        accelerator="ddp",
         logger=wandb_logger,
         move_metrics_to_cpu=True,
         limit_train_batches=len(train_data) //
