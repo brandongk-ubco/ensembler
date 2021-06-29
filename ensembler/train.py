@@ -22,7 +22,7 @@ def add_argparse_args(parser):
                         type=int,
                         default=os.environ.get("NUM_WORKERS",
                                                os.cpu_count() - 1)),
-    parser.add_argument('--batch_size_per_gpu', type=int, default=20)
+    parser.add_argument('--batch_size_per_gpu', type=int, default=25)
     parser.add_argument('--dataset_split_seed', type=int, default=42)
     parser.add_argument('--accumulate_grad_batches', type=int, default=1)
     parser.add_argument('--patch_height', type=int, default=512)
@@ -84,13 +84,15 @@ def execute(args):
         project=dict_args["project_name"]
         if dict_args["project_name"] else dict_args["dataset_name"],
         entity=dict_args["entity"],
-        name=dict_args["name"])
+        name=dict_args["name"],
+        resume=True)
 
     if "SIGUSR1" in [f.name for f in (signal.Signals)]:
         signal.signal(signal.SIGUSR1, wandb.mark_preempting)
 
     dataset_folder = os.path.join(dict_args["data_dir"],
                                   dict_args["dataset_name"])
+    print("Using dataset {}".format(dataset_folder))
     augmenters = get_augmenters(dict_args["batch_loss_multiplier"] > 0)
     augments = get_augments(dict_args["patch_height"],
                             dict_args["patch_width"])

@@ -14,8 +14,8 @@ def parse_parameters():
     parser.add_argument('--data_dir',
                         type=str,
                         nargs='?',
-                        const=os.environ.get("DATA_DIR", None),
-                        default=os.environ.get("DATA_DIR", None))
+                        const=os.environ.get("OVERRIDE_DATA_DIR", os.environ.get("DATA_DIR", None)),
+                        default=os.environ.get("OVERRIDE_DATA_DIR", os.environ.get("DATA_DIR", None)))
     subparsers = parser.add_subparsers(title="task", dest="task")
     for task_name in Tasks.choices():
         subparser = subparsers.add_parser(task_name,
