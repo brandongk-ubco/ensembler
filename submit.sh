@@ -3,9 +3,9 @@
 # SLURM SUBMIT SCRIPT
 #SBATCH --requeue
 #SBATCH --nodes=1
-#SBATCH --gres=gpu:v100l:2
-#SBATCH --mem=96000M
-#SBATCH --cpus-per-task=16
+#SBATCH --gres=gpu:p100:2
+#SBATCH --mem=64000M
+#SBATCH --cpus-per-task=12
 #SBATCH --time=0-3:00:00
 #SBATCH --signal=SIGUSR1@90
 
@@ -18,7 +18,7 @@ echo "Done copying files"
 
 export PYTHONFAULTHANDLER=1
 export PYTHONUNBUFFERED=1
-export NUM_WORKERS=15
+export NUM_WORKERS=11
 export OVERRIDE_DATA_DIR=${SLURM_TMPDIR}
 
 srun --ntasks=$SLURM_NNODES --ntasks-per-node=1 wandb agent --count 1 $SWEEP_ID
