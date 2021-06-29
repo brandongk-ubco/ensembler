@@ -186,12 +186,12 @@ class Segmenter(pl.LightningModule):
         y_hat = self(x)
         return self.loss(y_hat, y)
 
-    def training_step_end(self, steps):
-        # Hack to handle the single step case
-        if type(steps) == torch.Tensor:
-            steps = [steps]
+    # def training_step_end(self, steps):
+    #     # Hack to handle the single step case
+    #     if type(steps) == torch.Tensor:
+    #         steps = [steps]
 
-        return torch.stack(steps).mean()
+    #     return torch.stack(steps).mean()
 
     def forward(self, x):
         return self.model(x)
@@ -199,14 +199,15 @@ class Segmenter(pl.LightningModule):
     def validation_step(self, batch, _batch_idx):
         x, y = batch
         y_hat = self(x)
-        return self.loss(y_hat, y)
+        loss = self.loss(y_hat, y)
+        self.log("val_loss", loss, on_step=False, on_epoch=True)
 
-    def validation_epoch_end(self, steps):
+    # def validation_epoch_end(self, steps):
 
-        if type(steps) == torch.Tensor:
-            steps = [steps]
+    #     if type(steps) == torch.Tensor:
+    #         steps = [steps]
 
-        self.log("val_loss", torch.stack(steps).mean())
+    #     self.log("val_loss", torch.stack(steps).mean())
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(),
