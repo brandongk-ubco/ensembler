@@ -19,13 +19,13 @@ class Activations(Enum):
         return sorted([e.value for e in cls])
 
     def get(activation):
-        if activation == "leaky_relu":
+        if activation.value == "leaky_relu":
             return Act.LEAKYRELU
-        if activation == "relu":
+        if activation.value == "relu":
             return Act.RELU
-        if activation == "tanh":
+        if activation.value == "tanh":
             return Act.TANH
-        if activation == "swish":
+        if activation.value == "swish":
             return Act.MEMSWISH
 
         raise ValueError("Activation %s not defined" % activation)

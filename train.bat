@@ -1,1 +1,1 @@
-python -m ensembler cityscapes train
+python trainer.py --data.dataset cityscapes --data.data_dir E:\work\datasets

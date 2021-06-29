@@ -1,3 +1,6 @@
+import torch
+
+
 def RoundUp(x, mul):
     return ((x + mul - 1) & (-mul))
 
@@ -23,3 +26,19 @@ def crop_image_only_outside(img, tol=0):
     col_start, col_end = mask0.argmax(), n - mask0[::-1].argmax()
     row_start, row_end = mask1.argmax(), m - mask1[::-1].argmax()
     return row_start, row_end, col_start, col_end
+
+
+def classwise(y_hat, y, metric, dim=1):
+
+    results = torch.empty(y_hat.shape[dim],
+                          dtype=y_hat.dtype,
+                          device=y_hat.device)
+
+    for i in torch.tensor(range(y_hat.shape[dim]),
+                          dtype=torch.long,
+                          device=y_hat.device):
+        y_hat_class = y_hat.index_select(dim, i)
+        y_class = y.index_select(dim, i)
+        results[i] = metric(y_hat_class, y_class)
+
+    return results

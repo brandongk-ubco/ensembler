@@ -5,6 +5,7 @@ import torch
 import pandas as pd
 from .helpers import process_split, repeat_infrequent_classes
 import json
+from ensembler.datasets.AugmentedDataset import DatasetAugmenter
 
 
 class CompressedNpzDataset:
@@ -65,7 +66,7 @@ class CompressedNpzDataset:
         return (image, mask)
 
     @classmethod
-    def get_dataloaders(cls, directory, augmenters, batch_size, augmentations):
+    def get_dataloaders(cls, directory, batch_size, augmentations):
 
         with open(os.path.join(directory, "split.json"), "r") as splitjson:
             sample_split = json.load(splitjson)
@@ -95,9 +96,8 @@ class CompressedNpzDataset:
                         split="test")
 
         preprocessing_transform, train_transform, patch_transform, test_transform = augmentations
-        train_augmenter, val_augmenter, test_augmenter = augmenters
 
-        train_data = train_augmenter(
+        train_data = DatasetAugmenter(
             train_data,
             patch_transform,
             preprocessing_transform=preprocessing_transform,
@@ -105,12 +105,12 @@ class CompressedNpzDataset:
             batch_size=batch_size,
             shuffle=True)
 
-        val_data = val_augmenter(
+        val_data = DatasetAugmenter(
             val_data,
             test_transform,
             preprocessing_transform=preprocessing_transform)
 
-        test_data = test_augmenter(
+        test_data = DatasetAugmenter(
             test_data,
             test_transform,
             preprocessing_transform=preprocessing_transform,
@@ -119,5 +119,5 @@ class CompressedNpzDataset:
         return train_data, val_data, test_data
 
     @classmethod
-    def get_all_dataloader(cls, directory, Dataset):
+    def get_all_dataloader(cls, directory):
         return cls(directory, split="all")
