@@ -22,20 +22,13 @@ def get_augments(image_height, image_width):
         A.Rotate(limit=10),
         A.HorizontalFlip(p=0.5),
         # A.ElasticTransform(alpha=20, sigma=20 * 0.05, alpha_affine=20 * 0.03),
-        A.OneOf(
-            [
-                A.JpegCompression(quality_lower=90),
-                A.Blur(),
-                A.GaussNoise(),
-                # A.MultiplicativeNoise(),
-            ],
-            p=0.25),
         A.OneOf([
-            A.RandomBrightness(),
-            A.RandomBrightnessContrast(),
-            A.RandomContrast()
+            A.ImageCompression(quality_lower=90),
+            A.Blur(),
+            A.GaussNoise(),
         ],
                 p=0.25),
+        A.RandomBrightnessContrast(p=0.25),
         A.ToFloat(always_apply=True),
     ])
 

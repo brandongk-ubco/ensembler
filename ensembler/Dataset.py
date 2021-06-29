@@ -1,11 +1,11 @@
-import pytorch_lightning as pl
+from pytorch_lightning.core.datamodule import LightningDataModule
 import torch
 import os
 from ensembler.datasets import Datasets
 from ensembler.augments import get_augments
 
 
-class Dataset(pl.core.datamodule.LightningDataModule):
+class Dataset(LightningDataModule):
     def __init__(self,
                  data_dir: str,
                  dataset: Datasets,

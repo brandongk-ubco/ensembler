@@ -1,11 +1,11 @@
-import pytorch_lightning as pl
+from pytorch_lightning.callbacks import Callback
 import json
 import os
 import wandb
 from pytorch_lightning.utilities import rank_zero_only
 
 
-class RecordTrainStatus(pl.callbacks.Callback):
+class RecordTrainStatus(Callback):
     def _write_train_status(self, trainer, pl_module):
         state = {
             "Trainer": {
@@ -37,7 +37,7 @@ class RecordTrainStatus(pl.callbacks.Callback):
         self._write_train_status(trainer, pl_module)
 
 
-class WandbFileUploader(pl.callbacks.Callback):
+class WandbFileUploader(Callback):
     def __init__(self, patterns):
         self.patterns = patterns
 

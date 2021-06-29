@@ -1,4 +1,6 @@
-import pytorch_lightning as pl
+from pytorch_lightning import LightningModule
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, EarlyStopping, GPUStatsMonitor
+from pytorch_lightning.utilities.exceptions import MisconfigurationException
 import torch
 from ensembler.losses import FocalLoss, TverskyLoss
 # from segmentation_models_pytorch.utils.metrics import IoU, Precision, Recall, Fscore, Accuracy
@@ -7,7 +9,7 @@ from ensembler.Activations import Activations
 from ensembler.utils import classwise
 
 
-class Segmenter(pl.LightningModule):
+class Segmenter(LightningModule):
     def __init__(self,
                  in_channels: int = 3,
                  out_classes: int = 1,
@@ -17,6 +19,7 @@ class Segmenter(pl.LightningModule):
                  residual_units: int = 2,
                  width_ratio: float = 1.0,
                  focal_loss_multiplier: float = 1.0,
+                 tversky_loss_multiplier: float = 1.0,
                  weight_decay: float = 0.0,
                  learning_rate: float = 5e-3,
                  min_learning_rate: float = 3e-4,
@@ -30,21 +33,19 @@ class Segmenter(pl.LightningModule):
 
     def configure_callbacks(self):
         callbacks = [
-            pl.callbacks.LearningRateMonitor(logging_interval='step',
-                                             log_momentum=True),
-            pl.callbacks.ModelCheckpoint(
-                monitor='val_loss',
-                save_top_k=1,
-                mode="min",
-                filename='{epoch}-{val_loss:.6f}-{val_iou:.3f}'),
-            pl.callbacks.EarlyStopping(patience=3 * self.hparams.patience,
-                                       monitor='val_loss',
-                                       mode='min'),
+            LearningRateMonitor(logging_interval='step', log_momentum=True),
+            ModelCheckpoint(monitor='val_loss',
+                            save_top_k=1,
+                            mode="min",
+                            filename='{epoch}-{val_loss:.6f}-{val_iou:.3f}'),
+            EarlyStopping(patience=3 * self.hparams.patience,
+                          monitor='val_loss',
+                          mode='min'),
         ]
 
         try:
-            callbacks.append(pl.callbacks.GPUStatsMonitor())
-        except pl.utilities.exceptions.MisconfigurationException:
+            callbacks.append(GPUStatsMonitor())
+        except MisconfigurationException:
             pass
         return callbacks
 
@@ -75,7 +76,7 @@ class Segmenter(pl.LightningModule):
 
         loss_values = {}
 
-        if self.focal_loss_multiplier > 0:
+        if self.hparams.focal_loss_multiplier > 0:
             focal_loss = classwise(
                 y_hat,
                 y,
@@ -85,10 +86,10 @@ class Segmenter(pl.LightningModule):
                 dim=1)
 
             loss_values[
-                "focal_loss"] = self.focal_loss_multiplier * focal_loss[
+                "focal_loss"] = self.hparams.focal_loss_multiplier * focal_loss[
                     focal_loss >= 0].mean()
 
-        if self.tversky_loss_multiplier > 0:
+        if self.hparams.tversky_loss_multiplier > 0:
             tversky_loss = classwise(
                 y_hat,
                 y,
@@ -98,7 +99,7 @@ class Segmenter(pl.LightningModule):
                 dim=1)
 
             loss_values[
-                "tversky_loss"] = self.tversky_loss_multiplier * tversky_loss[
+                "tversky_loss"] = self.hparams.tversky_loss_multiplier * tversky_loss[
                     tversky_loss >= 0].mean()
 
         return loss_values["focal_loss"] + loss_values["tversky_loss"]
@@ -106,7 +107,7 @@ class Segmenter(pl.LightningModule):
     def training_step(self, batch, _batch_idx):
         x, y = batch
         y_hat = self(x)
-        return self.loss(y_hat, y, on_step=True, on_epoch=False)
+        return self.loss(y_hat, y)
 
     def forward(self, x):
         return self.model(x)
