@@ -18,7 +18,7 @@ class Dataset(LightningDataModule):
         self.dataset = Datasets.get(dataset.value)
         data_dir = os.environ.get("OVERRIDE_DATA_DIR", os.environ["DATA_DIR"])
         self.data_dir = os.path.join(os.path.abspath(data_dir), dataset.value)
-        self.num_workers = num_workers
+        self.num_workers = int(num_workers)
         self.batch_size = batch_size
         self.dataset_split_seed = dataset_split_seed
         self.patch_height = patch_height
