@@ -33,18 +33,21 @@ class Dataset(LightningDataModule):
                                            batch_size=self.batch_size,
                                            num_workers=self.num_workers,
                                            shuffle=False,
-                                           drop_last=True)
+                                           drop_last=True,
+                                           pin_memory=True)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(self.val_data,
                                            batch_size=1,
                                            num_workers=self.num_workers,
                                            shuffle=False,
-                                           drop_last=False)
+                                           drop_last=False,
+                                           pin_memory=True)
 
     def test_dataloader(self):
         return torch.utils.data.DataLoader(self.test_data,
                                            batch_size=1,
                                            num_workers=self.num_workers,
                                            shuffle=False,
-                                           drop_last=False)
+                                           drop_last=False,
+                                           pin_memory=True)

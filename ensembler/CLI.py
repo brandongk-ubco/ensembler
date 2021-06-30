@@ -1,5 +1,7 @@
 from pytorch_lightning.utilities.cli import LightningCLI
 from ensembler.loggers import WandbLogger
+from pytorch_lightning.plugins import DDPPlugin
+import sys
 
 
 class CLI(LightningCLI):
@@ -17,5 +19,9 @@ class CLI(LightningCLI):
             entity=self.config["entity"],
             name=self.config["name"],
             resume=True)
+
+        if sys.platform in ['linux', 'linux2']:
+            self.config_init['trainer']['plugins'] = DDPPlugin(
+                find_unused_parameters=False)
 
         self.trainer = self.trainer_class(**self.config_init['trainer'])
