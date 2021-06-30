@@ -24,7 +24,6 @@ class Dataset(LightningDataModule):
         self.patch_height = patch_height
         self.patch_width = patch_width
 
-    def prepare_data(self):
         self.augments = get_augments(self.patch_height, self.patch_width)
         self.train_data, self.val_data, self.test_data = self.dataset.get_dataloaders(
             self.data_dir, self.batch_size, self.augments)
