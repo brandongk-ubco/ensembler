@@ -1,6 +1,5 @@
 from pytorch_lightning.utilities.cli import LightningCLI
 from ensembler.loggers import WandbLogger
-import sys
 
 
 class CLI(LightningCLI):
@@ -18,9 +17,6 @@ class CLI(LightningCLI):
             entity=self.config["entity"],
             name=self.config["name"],
             resume=True)
-        if sys.platform == 'win32':
-            self.config_init['trainer']["accelerator"] = None
-        else:
-            self.config_init['trainer']["accelerator"] = "ddp"
+
         self.config_init['trainer']["sync_batchnorm"] = True
         self.trainer = self.trainer_class(**self.config_init['trainer'])

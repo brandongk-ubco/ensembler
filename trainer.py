@@ -2,8 +2,14 @@ from ensembler.Model import Segmenter
 from ensembler.Dataset import Dataset
 from ensembler.CLI import CLI
 import sys
+from pytorch_lightning.plugins import DDPPlugin
 
 if __name__ == "__main__":
+
+    plugins = []
+
+    if sys.platform != 'win32':
+        plugins.append(DDPPlugin(find_unused_parameters=False))
 
     cli = CLI(Segmenter,
               Dataset,
@@ -11,7 +17,8 @@ if __name__ == "__main__":
               trainer_defaults={
                   "gpus": -1,
                   "deterministic": True,
-                  "max_epochs": sys.maxsize
+                  "max_epochs": sys.maxsize,
+                  "plugins": plugins
               })
 
     # if "SIGUSR1" in [f.name for f in (signal.Signals)]:
