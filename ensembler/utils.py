@@ -30,6 +30,8 @@ def crop_image_only_outside(img, tol=0):
 
 def classwise(y_hat, y, metric, dim=1):
 
+    assert y_hat.shape[dim] == y.shape[dim]
+
     results = torch.empty(y_hat.shape[dim],
                           dtype=y_hat.dtype,
                           device=y_hat.device)

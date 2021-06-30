@@ -1,5 +1,5 @@
 from pytorch_lightning import LightningModule
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, EarlyStopping, GPUStatsMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor, EarlyStopping, ModelCheckpoint, GPUStatsMonitor
 from pytorch_lightning.utilities.exceptions import MisconfigurationException
 import torch
 from ensembler.losses import FocalLoss, TverskyLoss
@@ -33,14 +33,15 @@ class Segmenter(LightningModule):
 
     def configure_callbacks(self):
         callbacks = [
-            LearningRateMonitor(logging_interval='step', log_momentum=True),
+            LearningRateMonitor(logging_interval='epoch', log_momentum=True),
+            EarlyStopping(patience=3 * self.hparams.patience,
+                          monitor='val_loss',
+                          verbose=True,
+                          mode='min'),
             ModelCheckpoint(monitor='val_loss',
                             save_top_k=1,
                             mode="min",
                             filename='{epoch}-{val_loss:.6f}-{val_iou:.3f}'),
-            EarlyStopping(patience=3 * self.hparams.patience,
-                          monitor='val_loss',
-                          mode='min'),
         ]
 
         try:
@@ -73,36 +74,31 @@ class Segmenter(LightningModule):
         return model
 
     def loss(self, y_hat, y):
+        assert y_hat.shape == y.shape
 
-        loss_values = {}
+        focal_loss = classwise(
+            y_hat,
+            y,
+            metric=lambda y_hat, y: -1
+            if not y.max() > 0 else FocalLoss("binary", from_logits=False)
+            (y_hat, y),
+            dim=1)
 
-        if self.hparams.focal_loss_multiplier > 0:
-            focal_loss = classwise(
-                y_hat,
-                y,
-                metric=lambda y_hat, y: -1
-                if not y.max() > 0 else FocalLoss("binary", from_logits=False)
-                (y_hat, y),
-                dim=1)
+        focal_loss = self.hparams.focal_loss_multiplier * focal_loss[
+            focal_loss >= 0].mean()
 
-            loss_values[
-                "focal_loss"] = self.hparams.focal_loss_multiplier * focal_loss[
-                    focal_loss >= 0].mean()
+        tversky_loss = classwise(
+            y_hat,
+            y,
+            metric=lambda y_hat, y: -1
+            if not y.max() > 0 else TverskyLoss(from_logits=False)(y_hat, y),
+            dim=1)
 
-        if self.hparams.tversky_loss_multiplier > 0:
-            tversky_loss = classwise(
-                y_hat,
-                y,
-                metric=lambda y_hat, y: -1
-                if not y.max() > 0 else TverskyLoss(from_logits=False)
-                (y_hat, y),
-                dim=1)
+        tversky_loss = self.hparams.tversky_loss_multiplier * tversky_loss[
+            tversky_loss >= 0].mean()
 
-            loss_values[
-                "tversky_loss"] = self.hparams.tversky_loss_multiplier * tversky_loss[
-                    tversky_loss >= 0].mean()
-
-        return loss_values["focal_loss"] + loss_values["tversky_loss"]
+        loss = focal_loss + tversky_loss
+        return loss
 
     def training_step(self, batch, _batch_idx):
         x, y = batch
@@ -116,8 +112,7 @@ class Segmenter(LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.loss(y_hat, y)
-        self.log("val_loss", loss, on_step=False, on_epoch=True)
-        return loss
+        self.log('val_loss', loss, on_step=False, on_epoch=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(),
@@ -129,6 +124,7 @@ class Segmenter(LightningModule):
             patience=self.hparams.patience,
             cooldown=self.hparams.patience // 2,
             min_lr=self.hparams.min_learning_rate,
+            verbose=True,
             mode="min")
 
         return {
