@@ -5,12 +5,6 @@ import sys
 from pytorch_lightning.plugins import DDPPlugin
 
 if __name__ == "__main__":
-
-    plugins = []
-
-    if sys.platform != 'win32':
-        plugins.append(DDPPlugin(find_unused_parameters=False))
-
     cli = CLI(Segmenter,
               Dataset,
               seed_everything_default=42,
@@ -18,7 +12,8 @@ if __name__ == "__main__":
                   "gpus": -1,
                   "deterministic": True,
                   "max_epochs": sys.maxsize,
-                  "plugins": plugins
+                  "accelerator": None if sys.platform == "win32" else "ddp",
+                  "sync_batchnorm": True
               })
 
     # if "SIGUSR1" in [f.name for f in (signal.Signals)]:

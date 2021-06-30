@@ -18,5 +18,4 @@ class CLI(LightningCLI):
             name=self.config["name"],
             resume=True)
 
-        self.config_init['trainer']["sync_batchnorm"] = True
         self.trainer = self.trainer_class(**self.config_init['trainer'])
