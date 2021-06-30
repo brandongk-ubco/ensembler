@@ -13,7 +13,7 @@ class Segmenter(LightningModule):
     def __init__(self,
                  in_channels: int = 3,
                  out_classes: int = 1,
-                 patience: int = 5,
+                 patience: int = 3,
                  depth: int = 5,
                  width: int = 40,
                  residual_units: int = 2,
@@ -22,7 +22,7 @@ class Segmenter(LightningModule):
                  tversky_loss_multiplier: float = 1.0,
                  weight_decay: float = 0.0,
                  learning_rate: float = 5e-3,
-                 min_learning_rate: float = 3e-4,
+                 min_learning_rate: float = 5e-4,
                  activation: Activations = "relu"):
         super().__init__()
         self.save_hyperparameters()
@@ -34,7 +34,7 @@ class Segmenter(LightningModule):
     def configure_callbacks(self):
         callbacks = [
             LearningRateMonitor(logging_interval='epoch', log_momentum=True),
-            EarlyStopping(patience=3 * self.hparams.patience,
+            EarlyStopping(patience=2 * self.hparams.patience,
                           monitor='val_loss',
                           verbose=True,
                           mode='min'),
@@ -122,7 +122,6 @@ class Segmenter(LightningModule):
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             optimizer,
             patience=self.hparams.patience,
-            cooldown=self.hparams.patience // 2,
             min_lr=self.hparams.min_learning_rate,
             verbose=True,
             mode="min")
