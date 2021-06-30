@@ -8,6 +8,7 @@ condaenv.*
 hpc_ckpt_*.ckpt
 wandb/
 cityscapes/
+config.yaml
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

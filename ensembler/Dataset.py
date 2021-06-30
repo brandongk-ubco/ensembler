@@ -7,7 +7,6 @@ from ensembler.augments import get_augments
 
 class Dataset(LightningDataModule):
     def __init__(self,
-                 data_dir: str,
                  dataset: Datasets,
                  num_workers: int = os.environ.get("NUM_WORKERS",
                                                    os.cpu_count() - 1),
@@ -17,6 +16,7 @@ class Dataset(LightningDataModule):
                  patch_width=512):
         super().__init__()
         self.dataset = Datasets.get(dataset.value)
+        data_dir = os.environ.get("OVERRIDE_DATA_DIR", os.environ["DATA_DIR"])
         self.data_dir = os.path.join(os.path.abspath(data_dir), dataset.value)
         self.num_workers = num_workers
         self.batch_size = batch_size
