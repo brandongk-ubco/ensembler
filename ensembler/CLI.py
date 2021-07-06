@@ -20,8 +20,4 @@ class CLI(LightningCLI):
             name=self.config["name"],
             resume=True)
 
-        if sys.platform in ['linux', 'linux2']:
-            self.config_init['trainer']['plugins'] = DDPPlugin(
-                find_unused_parameters=False, sync_batchnorm=True)
-
         self.trainer = self.trainer_class(**self.config_init['trainer'])

@@ -41,7 +41,7 @@ class Segmenter(LightningModule):
             ModelCheckpoint(monitor='val_loss',
                             save_top_k=1,
                             mode="min",
-                            filename='{epoch}-{val_loss:.6f}-{val_iou:.3f}'),
+                            filename='{epoch}-{val_loss:.6f}'),
         ]
 
         try:
@@ -60,7 +60,7 @@ class Segmenter(LightningModule):
 
         model = monai.networks.nets.UNet(
             dimensions=2,
-            in_channels=3,
+            in_channels=self.hparams.in_channels,
             out_channels=self.hparams.out_classes,
             channels=channels,
             strides=[2] * self.hparams.depth,

@@ -7,15 +7,6 @@ import os
 def parse_parameters():
 
     parser = ArgumentParser()
-    parser.add_argument(dest="dataset_name",
-                        type=str,
-                        choices=Datasets.choices())
-    parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--data_dir',
-                        type=str,
-                        nargs='?',
-                        const=os.environ.get("OVERRIDE_DATA_DIR", os.environ.get("DATA_DIR", None)),
-                        default=os.environ.get("OVERRIDE_DATA_DIR", os.environ.get("DATA_DIR", None)))
     subparsers = parser.add_subparsers(title="task", dest="task")
     for task_name in Tasks.choices():
         subparser = subparsers.add_parser(task_name,

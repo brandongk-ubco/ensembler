@@ -1,0 +1,26 @@
+data:
+    dataset:
+        - cityscapes 
+model:
+    in_channels:
+        - 3
+    out_classes:
+        - 19
+    activation:
+        - leaky_relu
+        - relu
+        - tanh
+        - swish
+    depth:
+        - 4
+        - 6
+        - 8
+    residual_units:
+        - 2
+        - 4
+    width:
+        - 30
+        - 50
+    width_ratio:
+        - 1.2
+        - 1.4
