@@ -21,4 +21,4 @@ export PYTHONUNBUFFERED=1
 export NUM_WORKERS=11
 export OVERRIDE_DATA_DIR=${SLURM_TMPDIR}
 
-srun --ntasks=$SLURM_NNODES --ntasks-per-node=1 /usr/bin/env python trainer.py --config config.yaml
+srun --ntasks=$SLURM_NNODES --ntasks-per-node=1 python trainer.py --config config.yaml

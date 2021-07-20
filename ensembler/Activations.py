@@ -7,6 +7,10 @@ class Activations(Enum):
     relu = "relu"
     tanh = "tanh"
     swish = "swish"
+    cos = "cos"
+    liht = "liht"
+    piecewise_linear = "piecewise_linear"
+    linear = "linear"
 
     def __str__(self):
         return self.name
@@ -27,5 +31,13 @@ class Activations(Enum):
             return Act.TANH
         if activation.value == "swish":
             return Act.MEMSWISH
+        if activation.value == "cos":
+            return Act.COS
+        if activation.value == "liht":
+            return Act.LIHT
+        if activation.value == "linear":
+            return Act.LINEAR
+        if activation.value == "piecewise_linear":
+            return Act.PIECEWISELINEAR
 
         raise ValueError("Activation %s not defined" % activation)

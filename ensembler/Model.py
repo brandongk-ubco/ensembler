@@ -112,7 +112,7 @@ class Segmenter(LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.loss(y_hat, y)
-        self.log('val_loss', loss, on_step=False, on_epoch=True)
+        self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(),

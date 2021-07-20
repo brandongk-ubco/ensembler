@@ -5,6 +5,9 @@ from ensembler import predict
 from ensembler import evaluate
 from ensembler import visualize
 from ensembler import search
+from ensembler import monai_init
+
+monai_init.initialize()
 
 
 class Tasks(Enum):
