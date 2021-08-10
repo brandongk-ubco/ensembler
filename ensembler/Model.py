@@ -7,9 +7,12 @@ from ensembler.losses import FocalLoss, TverskyLoss
 import monai
 from ensembler.Activations import Activations
 from ensembler.utils import classwise
+import os
+import numpy as np
 
 
 class Segmenter(LightningModule):
+
     def __init__(self,
                  in_channels: int = 3,
                  out_classes: int = 1,
@@ -54,8 +57,7 @@ class Segmenter(LightningModule):
 
         channels = [self.hparams.width] * self.hparams.depth
         channels = [
-            int(c * self.hparams.width_ratio**i)
-            for i, c in enumerate(channels)
+            int(c * self.hparams.width_ratio**i) for i, c in enumerate(channels)
         ]
 
         model = monai.networks.nets.UNet(
@@ -81,8 +83,7 @@ class Segmenter(LightningModule):
             y,
             metric=lambda y_hat, y: -1
             if not y.max() > 0 else FocalLoss("binary", from_logits=False)
-            (y_hat, y),
-            dim=1)
+            (y_hat, y))
 
         focal_loss = self.hparams.focal_loss_multiplier * focal_loss[
             focal_loss >= 0].mean()
@@ -91,8 +92,7 @@ class Segmenter(LightningModule):
             y_hat,
             y,
             metric=lambda y_hat, y: -1
-            if not y.max() > 0 else TverskyLoss(from_logits=False)(y_hat, y),
-            dim=1)
+            if not y.max() > 0 else TverskyLoss(from_logits=False)(y_hat, y))
 
         tversky_loss = self.hparams.tversky_loss_multiplier * tversky_loss[
             tversky_loss >= 0].mean()
@@ -133,3 +133,22 @@ class Segmenter(LightningModule):
                 "monitor": "val_loss"
             }
         }
+
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x)
+        y_hat = torch.sigmoid(y_hat)
+
+        image_names = self.trainer.datamodule.test_data.dataset.get_image_names(
+        )
+        outdir = os.path.join(self.logger.save_dir, "predictions")
+        os.makedirs(outdir, exist_ok=True)
+
+        for idx in range(y_hat.shape[0]):
+            image_name = image_names[batch_idx + idx]
+            prediction = y_hat[
+                idx, :, :, :].clone().detach().cpu().numpy().transpose(1, 2, 0)
+            prediction = (prediction * 255).astype(np.uint8)
+
+            outfile = os.path.join(outdir, image_name)
+            np.savez_compressed(outfile, predicted_mask=prediction)

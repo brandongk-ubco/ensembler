@@ -3,32 +3,24 @@ from ensembler.p_tqdm import t_imap as mapper
 import numpy as np
 from ensembler.datasets import Datasets
 from functools import partial
-import gzip
 
 description = "Prepare dataset statistics required for sampling."
-
-
-def add_argparse_args(parser):
-    pass
 
 
 def get_image(dataloader, idx):
     return idx, dataloader[idx]
 
 
-def execute(args):
+def dataset_initialize(data_dir: str, dataset_name: str):
 
-    dict_args = vars(args)
+    indir = os.path.join(data_dir, "unprocessed", dataset_name)
 
-    indir = os.path.join(dict_args["data_dir"], "unprocessed",
-                         dict_args["dataset_name"])
-
-    intializer = Datasets.get_initializer(dict_args["dataset_name"])
+    intializer = Datasets.get_initializer(dataset_name)
     all_data = intializer.get_all_dataloader(indir)
 
     image_names = all_data.get_image_names()
 
-    outdir = os.path.join(dict_args["data_dir"], dict_args["dataset_name"])
+    outdir = os.path.join(data_dir, dataset_name)
 
     num_images = len(all_data)
     os.makedirs(outdir, exist_ok=True)

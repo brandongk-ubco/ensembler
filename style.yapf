@@ -1,5 +1,0 @@
-[yapf]
-based_on_style = google
-
-[style]
-COLUMN_LIMIT=127

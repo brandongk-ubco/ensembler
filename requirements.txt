@@ -14,4 +14,4 @@ wandb
 git+https://github.com/Project-MONAI/MONAI#egg=monai
 lightning_bolts
 jsonargparse[signatures]
-flatten_dict
+argh

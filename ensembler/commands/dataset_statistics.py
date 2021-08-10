@@ -5,29 +5,21 @@ import json
 from ensembler.datasets import split_dataset, Datasets
 import torch
 
-description = "Prepare dataset statistics required for sampling."
 
+def dataset_statistics(data_dir: str,
+                       dataset_name: str,
+                       num_workers: int = os.cpu_count() - 1):
 
-def add_argparse_args(parser):
-    parser.add_argument('--num_workers', type=int, default=os.cpu_count() - 1)
+    outdir = os.path.join(data_dir, dataset_name)
 
+    dataset = Datasets.get(dataset_name)
+    all_data = dataset.get_all_dataloader(os.path.join(data_dir, dataset_name))
 
-def execute(args):
-
-    dict_args = vars(args)
-
-    outdir = os.path.join(dict_args["data_dir"], dict_args["dataset_name"])
-
-    dataset = Datasets.get(dict_args["dataset_name"])
-    all_data = dataset.get_all_dataloader(
-        os.path.join(dict_args["data_dir"], dict_args["dataset_name"]))
-
-    dataloader = torch.utils.data.DataLoader(
-        all_data,
-        batch_size=1,
-        num_workers=dict_args["num_workers"],
-        shuffle=False,
-        drop_last=False)
+    dataloader = torch.utils.data.DataLoader(all_data,
+                                             batch_size=1,
+                                             num_workers=num_workers,
+                                             shuffle=False,
+                                             drop_last=False)
 
     image_names = dataloader.dataset.get_image_names()
     results = pd.DataFrame(columns=["sample"] + list(dataset.classes),
@@ -38,8 +30,7 @@ def execute(args):
     if os.path.exists(statistics_file):
         results = pd.read_csv(statistics_file)
     else:
-        for batch, (x, y) in tqdm(enumerate(dataloader),
-                                  total=len(dataloader)):
+        for batch, (x, y) in tqdm(enumerate(dataloader), total=len(dataloader)):
             for i in range(x.shape[0]):
                 img = x[i, :, :, :]
                 mask = y[i, :, :, :]

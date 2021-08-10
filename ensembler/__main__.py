@@ -1,10 +1,8 @@
-import ensembler.environment
-from ensembler.parameters import parse_parameters
-from ensembler import Tasks
+import argh
+from ensembler.commands import dataset_initialize, dataset_statistics, evaluate
 
-parameters = parse_parameters()
+parser = argh.ArghParser()
+parser.add_commands([dataset_initialize, dataset_statistics, evaluate])
 
-dict_params = vars(parameters)
-
-task = Tasks.get(dict_params["task"])
-task(parameters)
+if __name__ == '__main__':
+    parser.dispatch()

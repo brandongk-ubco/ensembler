@@ -45,7 +45,8 @@ def _parallel(ordered: bool, function: Callable, *iterables: Iterable,
     else:
         # Determine length of tqdm (equal to length of shortest iterable)
         length = min(
-            len(iterable) for iterable in iterables
+            len(iterable)
+            for iterable in iterables
             if isinstance(iterable, Sized))
 
     # Create parallel generator
@@ -59,8 +60,7 @@ def _parallel(ordered: bool, function: Callable, *iterables: Iterable,
     pool.clear()
 
 
-def p_map(function: Callable, *iterables: Iterable,
-          **kwargs: Any) -> List[Any]:
+def p_map(function: Callable, *iterables: Iterable, **kwargs: Any) -> List[Any]:
     """Performs a parallel ordered map with a progress bar."""
 
     ordered = True
@@ -114,13 +114,16 @@ def _sequential(function: Callable, *iterables: Iterable,
         sequentially in order with a progress bar.
     """
 
+    kwargs.pop('num_cpus', None)
+
     if "total" in kwargs:
         length = kwargs["total"]
         del kwargs["total"]
     else:
         # Determine length of tqdm (equal to length of shortest iterable)
         length = min(
-            len(iterable) for iterable in iterables
+            len(iterable)
+            for iterable in iterables
             if isinstance(iterable, Sized))
 
     # Create sequential generator
@@ -128,8 +131,7 @@ def _sequential(function: Callable, *iterables: Iterable,
         yield item
 
 
-def t_map(function: Callable, *iterables: Iterable,
-          **kwargs: Any) -> List[Any]:
+def t_map(function: Callable, *iterables: Iterable, **kwargs: Any) -> List[Any]:
     """Performs a sequential map with a progress bar."""
 
     generator = _sequential(function, *iterables, **kwargs)

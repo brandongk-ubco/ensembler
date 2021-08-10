@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 
 def RoundUp(x, mul):
@@ -28,19 +29,41 @@ def crop_image_only_outside(img, tol=0):
     return row_start, row_end, col_start, col_end
 
 
-def classwise(y_hat, y, metric, dim=1):
+def classwise(y_hat, y, metric):
+    assert type(y_hat) == type(y)
+    if torch.is_tensor(y_hat):
+        return classwise_torch(y_hat, y, metric)
+    return classwise_numpy(np.asarray(y_hat), np.asarray(y), metric)
 
-    assert y_hat.shape[dim] == y.shape[dim]
 
-    results = torch.empty(y_hat.shape[dim],
+def classwise_numpy(y_hat, y, metric):
+
+    assert y_hat.shape == y.shape
+
+    results = np.empty(y_hat.shape[2], dtype=y_hat.dtype)
+
+    for i in range(y_hat.shape[2]):
+        y_hat_class = y_hat[:, :, i]
+        y_class = y[:, :, i]
+        assert y_hat_class.shape == y_class.shape
+        results[i] = metric(y_hat_class.flatten(), y_class.flatten())
+
+    return results
+
+
+def classwise_torch(y_hat, y, metric):
+
+    assert y_hat.shape == y.shape
+
+    results = torch.empty(y_hat.shape[1],
                           dtype=y_hat.dtype,
                           device=y_hat.device)
 
-    for i in torch.tensor(range(y_hat.shape[dim]),
+    for i in torch.tensor(range(y_hat.shape[1]),
                           dtype=torch.long,
                           device=y_hat.device):
-        y_hat_class = y_hat.index_select(dim, i)
-        y_class = y.index_select(dim, i)
+        y_hat_class = y_hat.index_select(1, i)
+        y_class = y.index_select(1, i)
         results[i] = metric(y_hat_class, y_class)
 
     return results
