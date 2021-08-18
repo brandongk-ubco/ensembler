@@ -1,0 +1,12 @@
+python -m ensembler evaluate cityscapes E:\work\results\grid_search\b3a8c2aca231d2ef7b3abe55934a46a5\
+python -m ensembler evaluate cityscapes E:\work\results\grid_search\ec4ae241e05d1485ae6cbf4aaef21af2\
+python -m ensembler evaluate cityscapes E:\work\results\grid_search\025cb7327dfa11ba27fd6fafcec81e13\
+python -m ensembler evaluate cityscapes E:\work\results\grid_search\19d293a721963ca01df39e0ad60b345d\
+python -m ensembler evaluate cityscapes E:\work\results\grid_search\0d18964b2b057db828383146e139a64f\
+python -m ensembler evaluate cityscapes E:\work\results\grid_search\b5ad99d9660efc50a846e6a4ae132a79\
+python -m ensembler evaluate cityscapes E:\work\results\grid_search\43252c4ff18bb0aa39ff8519fab2bdf7\
+python -m ensembler evaluate cityscapes E:\work\results\grid_search\8a0c373759bb91c245a2753524037edb\
+python -m ensembler evaluate cityscapes E:\work\results\grid_search\76d27f5d4795b8f188bad0013392c51c\
+python -m ensembler evaluate cityscapes E:\work\results\grid_search\b0b2d8790635c6f5cc88c549e4b0cb6b\
+python -m ensembler evaluate cityscapes E:\work\results\grid_search\7c38988a9eb7eea34b879c79d8c4e7af\
+python -m ensembler evaluate cityscapes E:\work\results\grid_search\55c1409a621fa087a4f9e69fa8763e17\

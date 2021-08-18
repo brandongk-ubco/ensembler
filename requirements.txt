@@ -15,3 +15,4 @@ git+https://github.com/Project-MONAI/MONAI#egg=monai
 lightning_bolts
 jsonargparse[signatures]
 argh
+flatten_dict

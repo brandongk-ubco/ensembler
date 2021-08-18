@@ -6,6 +6,7 @@ import sys
 import os
 import glob
 import re
+import time
 
 
 class TestingCLI(LightningCLI):
@@ -77,5 +78,10 @@ if __name__ == "__main__":
 
     cli.prepare_fit_kwargs()
     cli.before_test()
+    start_time = time.clock()
     cli.test()
+    end_time = time.clock()
+    total_time = end_time - start_time
+    with open(os.path.join(config_dir, "predict_time.txt"), "w") as f:
+        f.write(str(total_time))
     cli.after_test()

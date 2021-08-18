@@ -15,8 +15,8 @@ metrics = {
     "recall":
         lambda y_hat, y: -1 if not y.max() > 0 else (y_hat * y).sum() / y.sum(),
     "precision":
-        lambda y_hat, y: -1
-        if not y.max() > 0 else (y_hat * y).sum() / y_hat.sum()
+        lambda y_hat, y: -1 if not y.max() > 0 else 0
+        if not y_hat.max() > 0 else (y_hat * y).sum() / y_hat.sum()
 }
 
 
