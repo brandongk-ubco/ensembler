@@ -79,4 +79,4 @@ def evaluate(dataset: Datasets, base_dir: str, threshold: float = 0.5):
 
     outfile = os.path.join(os.path.abspath(base_dir), "metrics.csv")
     df = pd.DataFrame(results)
-    df.to_csv(outfile)
+    df.to_csv(outfile, index=False)

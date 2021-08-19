@@ -137,7 +137,6 @@ class Segmenter(LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self(x)
-        y_hat = torch.sigmoid(y_hat)
 
         image_names = self.trainer.datamodule.test_data.dataset.get_image_names(
         )

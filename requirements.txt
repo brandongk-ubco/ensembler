@@ -16,3 +16,6 @@ lightning_bolts
 jsonargparse[signatures]
 argh
 flatten_dict
+seaborn
+interpret
+jupyterlab
