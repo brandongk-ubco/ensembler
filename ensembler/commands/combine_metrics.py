@@ -43,8 +43,6 @@ def process_file(file_path: str) -> pd.DataFrame:
     metrics["loss"] = loss
     metrics["predict_time"] = predict_time
 
-    metrics = metrics.drop("Unnamed: 0", axis=1)
-
     return metrics
 
 
