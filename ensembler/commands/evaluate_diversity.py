@@ -39,13 +39,23 @@ def load_prediction(image_name, prediction_dir):
     assert os.path.exists(prediction_file)
     prediction = np.load(prediction_file)["predicted_mask"]
     prediction = prediction.reshape(-1, prediction.shape[-1])
-    return prediction[::10, :]
+    return prediction[::3, :]
 
 
 def compare_hash_for_job_and_class(clazz_idx, left, right):
     left_clazz = left[:, clazz_idx]
     right_clazz = right[:, clazz_idx]
-    return clazz_idx, np.corrcoef(left_clazz, right_clazz)[0, 1]
+
+    agreement = (left_clazz == right_clazz)
+    agreement_ratio = agreement.sum() / left_clazz.size
+    # significant = np.logical_or(
+    #     np.logical_or(np.logical_and(left_clazz > 0, left_clazz < 255),
+    #                   np.logical_and(right_clazz > 0, right_clazz < 255)),
+    #     left_clazz != right_clazz)
+    disagreement_correlation = np.corrcoef(left_clazz[~agreement],
+                                           right_clazz[~agreement])[0, 1]
+
+    return clazz_idx, agreement_ratio, disagreement_correlation
 
 
 def compare_hash_for_job(iteration, job_hashes, config_fetcher, in_dir):
@@ -96,15 +106,15 @@ def compare_hash_for_job(iteration, job_hashes, config_fetcher, in_dir):
         comparator = partial(compare_hash_for_job_and_class,
                              left=left,
                              right=right)
-        for clazz_idx, correlation in hash_mapper(comparator,
-                                                  range(left.shape[1]),
-                                                  num_cpus=os.cpu_count() // 2):
+        for clazz_idx, agreement, disagreement_correlation in hash_mapper(
+                comparator, range(left.shape[1]), num_cpus=os.cpu_count() // 2):
             clazz = classes[clazz_idx]
             result = {**config}
             result["class"] = clazz
             result["left_job_hash"] = job_hash
             result["right_job_hash"] = compare_hash
-            result["correlation"] = correlation
+            result["disagreement_correlation"] = disagreement_correlation
+            result["agreement"] = agreement
             results.append(result)
 
     return results
@@ -115,7 +125,7 @@ def evaluate_diversity(in_dir: str):
 
     config_fetcher = partial(get_config, base_dir=in_dir)
     results = []
-    outfile = os.path.join(in_dir, "diversity2.csv")
+    outfile = os.path.join(in_dir, "diversity.csv")
 
     results = None
     if os.path.exists(outfile):
@@ -124,6 +134,8 @@ def evaluate_diversity(in_dir: str):
     job_hashes = sorted([
         d for d in os.listdir(in_dir) if os.path.isdir(os.path.join(in_dir, d))
     ])
+
+    job_hashes = job_hashes[:2]
 
     hash_comparator = partial(compare_hash_for_job,
                               job_hashes=job_hashes,
@@ -136,6 +148,9 @@ def evaluate_diversity(in_dir: str):
                                enumerate(job_hashes[:-1]),
                                total=len(job_hashes) - 1):
         results += result
+
+        df = pd.DataFrame(results)
+        df.to_csv(outfile, index=False)
 
     df = pd.DataFrame(results)
     df.to_csv(outfile, index=False)
