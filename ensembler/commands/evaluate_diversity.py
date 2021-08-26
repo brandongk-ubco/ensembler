@@ -3,10 +3,16 @@ from functools import lru_cache
 import yaml
 from flatten_dict import flatten
 from functools import partial
-from ensembler.p_tqdm import t_imap as outer_mapper, p_imap as inner_mapper
+from ensembler.p_tqdm import t_imap as outer_mapper, p_imap as loader_mapper, t_imap as hash_mapper
 import glob
 import numpy as np
 import pandas as pd
+
+classes = [
+    "road", "sidewalk", "building", "wall", "fence", "pole", "traffic light",
+    "traffic sign", "vegetation", "terrain", "sky", "person", "rider", "car",
+    "truck", "bus", "train", "motorcycle", "bicycle"
+]
 
 
 @lru_cache(maxsize=None)
@@ -28,88 +34,78 @@ def get_config(base_dir, job_hash):
     return config
 
 
-def load_prediction(prediction_file):
+def load_prediction(image_name, prediction_dir):
+    prediction_file = os.path.join(prediction_dir, image_name)
     assert os.path.exists(prediction_file)
-    mask = np.load(prediction_file)["predicted_mask"].astype(np.float32)
-    return mask / 255
+    prediction = np.load(prediction_file)["predicted_mask"]
+    prediction = prediction.reshape(-1, prediction.shape[-1])
+    return prediction[::10, :]
 
 
-def compare_predictions(image_name, config, left_predictions_dir,
-                        right_predictions_dir):
-
-    left_prediction = load_prediction(
-        os.path.join(left_predictions_dir, image_name))
-    right_prediction = load_prediction(
-        os.path.join(right_predictions_dir, image_name))
-
-    difference = np.abs(left_prediction - right_prediction).mean()
-
-    return difference
+def compare_hash_for_job_and_class(clazz_idx, left, right):
+    left_clazz = left[:, clazz_idx]
+    right_clazz = right[:, clazz_idx]
+    return clazz_idx, np.corrcoef(left_clazz, right_clazz)[0, 1]
 
 
-def allbut(levels, names):
-    names = set(names)
-    return [item for item in levels if item not in names]
+def compare_hash_for_job(iteration, job_hashes, config_fetcher, in_dir):
 
+    i, job_hash = iteration
 
-def compare_hashes(hashes, config_fetcher, in_dir):
-    hash, compare_hash = hashes
-    left_predictions_dir = os.path.join(in_dir, hash, "predictions")
-    right_predictions_dir = os.path.join(in_dir, compare_hash, "predictions")
-    left_config = {**config_fetcher(job_hash=hash)}
-    right_config = {**config_fetcher(job_hash=compare_hash)}
-
-    if "data_dataset" not in left_config:
-        raise AttributeError("Couldn't find data_dataset in {}".format(hash))
-
-    if "data_dataset" not in right_config:
-        raise AttributeError(
-            "Couldn't find data_dataset in {}".format(compare_hash))
-
-    assert left_config["data_dataset"] == right_config["data_dataset"]
+    left_config = {**config_fetcher(job_hash=job_hash)}
     left_config.pop("data_dataset")
-    right_config.pop("data_dataset")
-
     left_config = dict([
         ("left_{}".format(k), v) for k, v in left_config.items()
     ])
 
-    right_config = dict([
-        ("right_{}".format(k), v) for k, v in right_config.items()
-    ])
+    left_predictions_dir = os.path.join(in_dir, job_hash, "predictions")
+    left_image_paths = glob.glob(os.path.join(left_predictions_dir, "*.npz"))
+    image_names = [os.path.basename(i) for i in left_image_paths]
 
-    config = {**left_config, **right_config}
+    left = []
+    left_loader = partial(load_prediction, prediction_dir=left_predictions_dir)
 
-    left_images = [
-        os.path.basename(i)
-        for i in glob.glob(os.path.join(left_predictions_dir, "*.npz"))
-    ]
-    right_images = [
-        os.path.basename(i)
-        for i in glob.glob(os.path.join(right_predictions_dir, "*.npz"))
-    ]
+    for left_prediction in loader_mapper(left_loader,
+                                         image_names,
+                                         num_cpus=os.cpu_count() // 2):
+        left.append(left_prediction)
 
-    missing_images = list(set(left_images).difference(right_images)) + list(
-        set(right_images).difference(left_images))
+    left = np.concatenate(left, axis=0)
 
-    if missing_images:
-        raise AssertionError(
-            "Expected all images to be in both folders, but some are not: {}".
-            format(missing_images))
+    results = []
 
-    result_comparator = partial(compare_predictions,
-                                config=config,
-                                left_predictions_dir=left_predictions_dir,
-                                right_predictions_dir=right_predictions_dir)
+    for compare_hash in job_hashes[i + 1:]:
 
-    differences = []
-    for result in inner_mapper(result_comparator,
-                               left_images,
-                               num_cpus=os.cpu_count() // 2):
-        differences.append(result)
+        right_predictions_dir = os.path.join(in_dir, compare_hash,
+                                             "predictions")
 
-    results = config
-    results["difference"] = np.mean(differences)
+        right_config = {**config_fetcher(job_hash=compare_hash)}
+        config = {**left_config, **right_config}
+
+        right = []
+        right_loader = partial(load_prediction,
+                               prediction_dir=right_predictions_dir)
+
+        for right_prediction in loader_mapper(right_loader,
+                                              image_names,
+                                              num_cpus=os.cpu_count() // 2):
+            right.append(right_prediction)
+
+        right = np.concatenate(right, axis=0)
+
+        comparator = partial(compare_hash_for_job_and_class,
+                             left=left,
+                             right=right)
+        for clazz_idx, correlation in hash_mapper(comparator,
+                                                  range(left.shape[1]),
+                                                  num_cpus=os.cpu_count() // 2):
+            clazz = classes[clazz_idx]
+            result = {**config}
+            result["class"] = clazz
+            result["left_job_hash"] = job_hash
+            result["right_job_hash"] = compare_hash
+            result["correlation"] = correlation
+            results.append(result)
 
     return results
 
@@ -119,8 +115,7 @@ def evaluate_diversity(in_dir: str):
 
     config_fetcher = partial(get_config, base_dir=in_dir)
     results = []
-    comparisons = []
-    outfile = os.path.join(in_dir, "diversity.csv")
+    outfile = os.path.join(in_dir, "diversity2.csv")
 
     results = None
     if os.path.exists(outfile):
@@ -130,20 +125,17 @@ def evaluate_diversity(in_dir: str):
         d for d in os.listdir(in_dir) if os.path.isdir(os.path.join(in_dir, d))
     ])
 
-    for i, hash in enumerate(job_hashes):
-        for compare_hash in job_hashes[i + 1:]:
-            comparisons.append((hash, compare_hash))
-
-    hash_comparator = partial(compare_hashes,
+    hash_comparator = partial(compare_hash_for_job,
+                              job_hashes=job_hashes,
                               config_fetcher=config_fetcher,
                               in_dir=in_dir)
 
     results = []
 
     for result in outer_mapper(hash_comparator,
-                               comparisons,
-                               num_cpus=os.cpu_count() // 2):
-        results.append(result)
+                               enumerate(job_hashes[:-1]),
+                               total=len(job_hashes) - 1):
+        results += result
 
     df = pd.DataFrame(results)
     df.to_csv(outfile, index=False)
