@@ -1,11 +1,8 @@
 import argh
-from ensembler.commands import dataset_initialize, dataset_statistics, evaluate, combine_metrics, evaluate_diversity
+from ensembler import commands
 
 parser = argh.ArghParser()
-parser.add_commands([
-    dataset_initialize, dataset_statistics, evaluate, combine_metrics,
-    evaluate_diversity
-])
+parser.add_commands(commands.__all__)
 
 if __name__ == '__main__':
     parser.dispatch()

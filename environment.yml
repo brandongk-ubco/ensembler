@@ -2,6 +2,7 @@ name: ensembler
 channels:
   - pytorch
   - conda-forge
+  - r
 dependencies:
   - python=3.8
   - numpy=1.19.*
@@ -16,5 +17,7 @@ dependencies:
   - pytorch-lightning=1.2.*
   - ffmpeg=4.3.*
   - pip
+  - ir-kernel
+  - r-tidyverse
   - pip:
     - -r requirements.txt

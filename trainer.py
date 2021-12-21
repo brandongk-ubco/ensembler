@@ -9,6 +9,7 @@ import os
 
 
 class MySaveConfigCallback(SaveConfigCallback):
+
     def on_train_start(self, trainer: Trainer,
                        pl_module: LightningModule) -> None:
         log_dir = trainer.log_dir or trainer.default_root_dir
@@ -26,10 +27,14 @@ if __name__ == "__main__":
               seed_everything_default=42,
               save_config_callback=MySaveConfigCallback,
               trainer_defaults={
-                  "gpus": -1,
-                  "deterministic": True,
-                  "max_epochs": sys.maxsize,
+                  "gpus":
+                      -1,
+                  "deterministic":
+                      True,
+                  "max_epochs":
+                      sys.maxsize,
                   "accelerator":
-                  "ddp" if sys.platform in ["linux", "linux2"] else None,
-                  "sync_batchnorm": True,
+                      "ddp" if sys.platform in ["linux", "linux2"] else None,
+                  "sync_batchnorm":
+                      True,
               })

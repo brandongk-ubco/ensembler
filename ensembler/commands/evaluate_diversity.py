@@ -48,17 +48,13 @@ def compare_hash_for_job_and_class(clazz_idx, left, right):
 
     agreement = (left_clazz == right_clazz)
     agreement_ratio = agreement.sum() / left_clazz.size
-    # significant = np.logical_or(
-    #     np.logical_or(np.logical_and(left_clazz > 0, left_clazz < 255),
-    #                   np.logical_and(right_clazz > 0, right_clazz < 255)),
-    #     left_clazz != right_clazz)
     disagreement_correlation = np.corrcoef(left_clazz[~agreement],
                                            right_clazz[~agreement])[0, 1]
 
     return clazz_idx, agreement_ratio, disagreement_correlation
 
 
-def compare_hash_for_job(iteration, job_hashes, config_fetcher, in_dir):
+def compare_hash_for_job(iteration, job_hashes, config_fetcher, in_dir, offset):
 
     i, job_hash = iteration
 
@@ -84,12 +80,16 @@ def compare_hash_for_job(iteration, job_hashes, config_fetcher, in_dir):
 
     results = []
 
-    for compare_hash in job_hashes[i + 1:]:
+    for compare_hash in job_hashes[i + 1 + offset:]:
 
         right_predictions_dir = os.path.join(in_dir, compare_hash,
                                              "predictions")
 
         right_config = {**config_fetcher(job_hash=compare_hash)}
+        right_config.pop("data_dataset")
+        right_config = dict([
+            ("right_{}".format(k), v) for k, v in right_config.items()
+        ])
         config = {**left_config, **right_config}
 
         right = []
@@ -127,26 +127,34 @@ def evaluate_diversity(in_dir: str):
     results = []
     outfile = os.path.join(in_dir, "diversity.csv")
 
-    results = None
-    if os.path.exists(outfile):
-        results = pd.read_csv(outfile)
-
     job_hashes = sorted([
         d for d in os.listdir(in_dir) if os.path.isdir(os.path.join(in_dir, d))
     ])
 
-    job_hashes = job_hashes[:2]
+    existing_results = None
+    if os.path.exists(outfile):
+        existing_results = pd.read_csv(outfile)
+        existing_results["left_job_hash"].unique()
+        process_job_hashes = sorted([
+            j for j in job_hashes
+            if j not in existing_results["left_job_hash"].unique()
+        ])
+        results = existing_results.to_dict('records')
+    else:
+        results = []
+        process_job_hashes = job_hashes
+
+    offset = len(job_hashes) - len(process_job_hashes)
 
     hash_comparator = partial(compare_hash_for_job,
                               job_hashes=job_hashes,
                               config_fetcher=config_fetcher,
+                              offset=offset,
                               in_dir=in_dir)
 
-    results = []
-
     for result in outer_mapper(hash_comparator,
-                               enumerate(job_hashes[:-1]),
-                               total=len(job_hashes) - 1):
+                               enumerate(process_job_hashes[:-1]),
+                               total=len(process_job_hashes) - 1):
         results += result
 
         df = pd.DataFrame(results)

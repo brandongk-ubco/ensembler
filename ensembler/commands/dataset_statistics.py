@@ -4,15 +4,17 @@ import pandas as pd
 import json
 from ensembler.datasets import split_dataset, Datasets
 import torch
+from argh import arg
 
 
+@arg('dataset', choices=Datasets.choices())
 def dataset_statistics(data_dir: str,
-                       dataset_name: str,
+                       dataset: Datasets,
                        num_workers: int = os.cpu_count() - 1):
 
+    dataset_name = dataset
+    dataset = Datasets[dataset]
     outdir = os.path.join(data_dir, dataset_name)
-
-    dataset = Datasets.get(dataset_name)
     all_data = dataset.get_all_dataloader(os.path.join(data_dir, dataset_name))
 
     dataloader = torch.utils.data.DataLoader(all_data,
