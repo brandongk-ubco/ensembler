@@ -1,0 +1,1 @@
+python -m ensembler evaluate-ensemble cityscapes E:\work\results\grid_search 025cb7327dfa11ba27fd6fafcec81e13 025e9ee4f5c6ff1fbb9a04e53c6fa7e1

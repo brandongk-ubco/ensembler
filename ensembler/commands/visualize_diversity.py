@@ -1,4 +1,3 @@
-from ensembler.methods import EnsembleMethods
 from argh import arg
 import pandas as pd
 import os
@@ -31,10 +30,7 @@ def get_config(base_dir, job_hash):
     return config
 
 
-@arg('method_name', choices=EnsembleMethods.choices())
-def ensemble(in_dir: str, method_name: str, p_thresh: float = 0.05):
-    assert method_name is not None
-
+def visualize_diversity(in_dir: str, p_thresh: float = 0.05):
     job_hashes = sorted([
         d for d in os.listdir(in_dir) if os.path.isdir(os.path.join(in_dir, d))
     ])
@@ -49,8 +45,6 @@ def ensemble(in_dir: str, method_name: str, p_thresh: float = 0.05):
 
     configs = pd.DataFrame(configs_list)
 
-    method = EnsembleMethods.get(method_name)
-
     metrics_file = os.path.join(in_dir, "metrics.csv")
     diversity_file = os.path.join(in_dir, "diversity.csv")
     tukey_file = os.path.join(in_dir, "tukey.csv")
@@ -60,10 +54,6 @@ def ensemble(in_dir: str, method_name: str, p_thresh: float = 0.05):
 
     metrics = pd.read_csv(metrics_file)
     diversity = pd.read_csv(diversity_file)
-    diversity = diversity[[
-        "left_job_hash", "right_job_hash", "agreement",
-        "disagreement_correlation", "class"
-    ]]
     tukey = pd.read_csv(tukey_file).rename(columns={"Unnamed: 0": "job_hashes"})
     tukey["better_job_hash"] = tukey.apply(
         lambda row: row["job_hashes"].split("-")[0], axis=1)
@@ -91,6 +81,20 @@ def ensemble(in_dir: str, method_name: str, p_thresh: float = 0.05):
             statistically_same[better].append(worse)
             statistically_same[worse].append(better)
 
+    ranked_mIoU = mIoU.reset_index().rename(columns={"index": "rank"})
+    ranked_mIoU["rank"] = ranked_mIoU["rank"] + 1
+    ranked_mIoU["statistically_same_count"] = ranked_mIoU["job_hash"].apply(
+        lambda job_hash: len(statistically_same[job_hash]))
+
+    plot = sns.barplot(data=ranked_mIoU, x='rank', y='statistically_same_count')
+    fig = plot.get_figure()
+
+    plt.xticks([0, len(ranked_mIoU) - 1])
+
+    outfile = os.path.join(in_dir, "statistical_same_count.png")
+    fig.savefig(outfile, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
     best_models = statistically_same["bfd33d38ce9c4d84b912f1ee0b7961aa"]
     best_models.append("bfd33d38ce9c4d84b912f1ee0b7961aa")
 
@@ -103,6 +107,9 @@ def ensemble(in_dir: str, method_name: str, p_thresh: float = 0.05):
         diversity["right_job_hash"].isin(best_models)].sort_values(
             by=["disagreement_correlation", "agreement"],
             ascending=[True, True])
+
+    # diversity.to_csv(os.path.join(in_dir, "diveristy.csv"))
+    configs.to_csv(os.path.join(in_dir, "configs.csv"), index=False)
 
     sns.set(rc={'figure.figsize': (11, 11)})
 
