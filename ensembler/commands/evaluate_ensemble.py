@@ -8,6 +8,8 @@ from ensembler.p_tqdm import p_uimap as mapper
 from functools import partial
 import pandas as pd
 from typing import List
+import hashlib
+import json
 
 metrics = {
     "iou":
@@ -70,6 +72,8 @@ def evaluate_ensemble(dataset: Datasets,
                       job_hashes: List[str],
                       threshold: float = 0.5):
 
+    job_hashes.sort()
+
     prediction_dir = os.path.abspath(base_dir)
 
     dataset = Datasets[dataset]
@@ -99,9 +103,14 @@ def evaluate_ensemble(dataset: Datasets,
     ):
         results += sample_results
 
-    import pdb
-    pdb.set_trace()
+    ensemble_hash = hashlib.md5("".join(job_hashes).encode()).hexdigest()
+    ensemble_dir = os.path.join(base_dir, "ensembles", ensemble_hash)
+    os.makedirs(ensemble_dir, exist_ok=True)
 
-    # outfile = os.path.join(os.path.abspath(base_dir), "metrics.csv")
-    # df = pd.DataFrame(results)
-    # df.to_csv(outfile, index=False)
+    outfile = os.path.join(os.path.abspath(ensemble_dir), "job_hashes.json")
+    with open(outfile, "w") as jsonfile:
+        json.dump(job_hashes, jsonfile, indent=4)
+
+    outfile = os.path.join(os.path.abspath(ensemble_dir), "metrics.csv")
+    df = pd.DataFrame(results)
+    df.to_csv(outfile, index=False)

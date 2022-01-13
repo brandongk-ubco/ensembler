@@ -32,7 +32,8 @@ def get_config(base_dir, job_hash):
 
 def visualize_diversity(in_dir: str, p_thresh: float = 0.05):
     job_hashes = sorted([
-        d for d in os.listdir(in_dir) if os.path.isdir(os.path.join(in_dir, d))
+        d for d in os.listdir(in_dir)
+        if os.path.isdir(os.path.join(in_dir, d)) and d != "ensembles"
     ])
 
     config_fetcher = partial(get_config, base_dir=in_dir)
@@ -85,6 +86,8 @@ def visualize_diversity(in_dir: str, p_thresh: float = 0.05):
     ranked_mIoU["rank"] = ranked_mIoU["rank"] + 1
     ranked_mIoU["statistically_same_count"] = ranked_mIoU["job_hash"].apply(
         lambda job_hash: len(statistically_same[job_hash]))
+
+    ranked_mIoU.to_csv(os.path.join(in_dir, "iou.csv"), index=False)
 
     plot = sns.barplot(data=ranked_mIoU, x='rank', y='statistically_same_count')
     fig = plot.get_figure()
