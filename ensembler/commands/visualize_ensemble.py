@@ -4,8 +4,9 @@ from typing import List
 import matplotlib
 from matplotlib import pyplot as plt
 import seaborn as sns
+import numpy as np
 
-sns.set_theme()
+sns.set(style="whitegrid")
 matplotlib.use('Agg')
 
 
@@ -32,6 +33,8 @@ def visualize_ensemble(base_dir: str, ensemble_hash: List[str]):
         ax.set_ylabel("mIoU")
 
         ax.set_title("mIoU by Ensemble Size - {}".format(clazz.title()))
+
+        plot.set_yticks(np.linspace(0, 1, num=11))
 
         outfile = os.path.join(base_dir, "ensembles", ensemble_hash,
                                "{}.png".format(clazz))

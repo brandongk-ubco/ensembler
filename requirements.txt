@@ -19,3 +19,4 @@ flatten_dict
 seaborn
 interpret
 jupyterlab
+kaleido

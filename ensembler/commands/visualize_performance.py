@@ -4,8 +4,11 @@ import matplotlib
 from matplotlib import pyplot as plt
 import seaborn as sns
 import numpy as np
+from sklearn.model_selection import train_test_split
+from interpret.glassbox import ExplainableBoostingRegressor
+from interpret.perf import RegressionPerf
 
-sns.set_theme()
+sns.set(style="whitegrid")
 matplotlib.use('Agg')
 
 
@@ -50,3 +53,51 @@ def visualize_performance(base_dir: str):
     outfile = os.path.join(base_dir, "performance.png")
     fig.savefig(outfile, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
+
+    train_cols = [
+        'depth', 'residual_units', 'width', 'width_ratio', 'activation', 'class'
+    ]
+    label = "value"
+
+    X = iou_df[train_cols]
+    y = iou_df[label]
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state)
+
+    feature_types = ['categorical'] * len(train_cols)
+
+    ebm = ExplainableBoostingRegressor(
+        feature_names=train_cols,
+        feature_types=feature_types,
+        # Overall
+        n_jobs=os.cpu_count(),
+        random_state=random_state,
+    )
+
+    print("Fitting EBM")
+    ebm.fit(X_train, y_train)
+    score = ebm.score(X_test, y_test)
+    print("Score: {}".format(score))
+    ebm_global = ebm.explain_global(name="IoU Predictor")
+
+    # ebm_local = ebm.explain_local(X_test, y_test, name="Local IoU Predictor")
+    ebm_perf = RegressionPerf(ebm.predict).explain_perf(X_test,
+                                                        y_test,
+                                                        name='IoU Prediction')
+
+    ebm_dir = os.path.join(base_dir, "ebm")
+    os.makedirs(ebm_dir, exist_ok=True)
+
+    plotly_fig = ebm_global.visualize()
+    outfile = os.path.join(ebm_dir, "importance.png")
+    plotly_fig.write_image(outfile)
+
+    for index, feature_name in enumerate(ebm_global.feature_names):
+        plotly_fig = ebm_global.visualize(index)
+        outfile = os.path.join(ebm_dir, f"{feature_name}.png")
+        plotly_fig.write_image(outfile)
+
+    plotly_fig = ebm_perf.visualize()
+    outfile = os.path.join(ebm_dir, "performance.png")
+    plotly_fig.write_image(outfile)
