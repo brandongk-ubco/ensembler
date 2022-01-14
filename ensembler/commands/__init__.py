@@ -7,9 +7,12 @@ from .evaluate_ensemble import evaluate_ensemble
 from .visualize_diversity import visualize_diversity
 from .combine_ensemble import combine_ensemble
 from .visualize_ensemble import visualize_ensemble
+from .combine_configs import combine_configs
+from .statistical_similarity import statistical_similarity
 
 __all__ = [
     dataset_initialize, dataset_statistics, evaluate, combine_metrics,
     evaluate_diversity, evaluate_ensemble, visualize_diversity,
-    combine_ensemble, visualize_ensemble
+    combine_ensemble, visualize_ensemble, combine_configs,
+    statistical_similarity
 ]
