@@ -1,19 +1,11 @@
-from ensembler.Dataset import Dataset
-from ensembler.datasets import Datasets
-from argh import arg
 import os
-import numpy as np
-from ensembler.utils import classwise
-from ensembler.p_tqdm import p_uimap as mapper
-from functools import partial
 import pandas as pd
 from typing import List
-import hashlib
-import json
 import matplotlib
 from matplotlib import pyplot as plt
 import seaborn as sns
 
+sns.set_theme()
 matplotlib.use('Agg')
 
 
@@ -26,10 +18,20 @@ def visualize_ensemble(base_dir: str, ensemble_hash: List[str]):
     df = df.rename(columns={"metric": "IoU"})
 
     for clazz in df["class"].unique():
+        print(clazz)
         class_data = df[df["class"] == clazz]
 
-        plot = sns.boxplot(data=class_data, x='ensemble_size', y='value')
+        plot = sns.boxplot(data=class_data,
+                           x='ensemble_size',
+                           y='value',
+                           color='lightblue')
         fig = plot.get_figure()
+        ax = fig.get_axes()[0]
+
+        ax.set_xlabel("Ensemble Size")
+        ax.set_ylabel("mIoU")
+
+        ax.set_title("mIoU by Ensemble Size - {}".format(clazz.title()))
 
         outfile = os.path.join(base_dir, "ensembles", ensemble_hash,
                                "{}.png".format(clazz))

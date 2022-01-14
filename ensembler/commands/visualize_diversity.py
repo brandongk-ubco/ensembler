@@ -1,11 +1,10 @@
 import pandas as pd
 import os
-
 from matplotlib import pyplot as plt
 import matplotlib
 import seaborn as sns
-import yaml
 
+sns.set_theme()
 matplotlib.use('Agg')
 
 
