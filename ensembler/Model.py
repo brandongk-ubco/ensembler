@@ -138,13 +138,24 @@ class Segmenter(LightningModule):
         x, y = batch
         y_hat = self(x)
 
-        image_names = self.trainer.datamodule.test_data.dataset.get_image_names(
-        )
-        outdir = os.path.join(self.logger.save_dir, "predictions")
-        os.makedirs(outdir, exist_ok=True)
+        dataset = self.trainer.datamodule.test_data.dataset
+
+        image_names = dataset.get_image_names()
+        prediction_dir = os.path.join(self.logger.save_dir, "predictions")
+        os.makedirs(prediction_dir, exist_ok=True)
+        val_dir = os.path.join(prediction_dir, "val")
+        test_dir = os.path.join(prediction_dir, "test")
+        os.makedirs(val_dir, exist_ok=True)
+        os.makedirs(test_dir, exist_ok=True)
 
         for idx in range(y_hat.shape[0]):
             image_name = image_names[batch_idx + idx]
+            if image_name in dataset.val_images:
+                outdir = val_dir
+            elif image_name in dataset.test_images:
+                outdir = test_dir
+            else:
+                raise AttributeError(f"Unknown image set for {image_name}")
             prediction = y_hat[
                 idx, :, :, :].clone().detach().cpu().numpy().transpose(1, 2, 0)
             prediction = (prediction * 255).astype(np.uint8)

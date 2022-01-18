@@ -9,6 +9,7 @@ from ensembler.datasets.AugmentedDataset import DatasetAugmenter
 
 
 class CompressedNpzDataset:
+
     def __init__(self,
                  folder,
                  train_images=None,
@@ -29,12 +30,15 @@ class CompressedNpzDataset:
             assert train_images is not None
             assert val_images is not None
             assert test_images is not None
+            self.train_images = train_images
+            self.val_images = val_images
+            self.test_images = test_images
             if self.split == "train":
                 self.images = train_images
             elif self.split == "val":
                 self.images = val_images
             elif self.split == "test":
-                self.images = test_images
+                self.images = val_images + test_images
             else:
                 raise ValueError(
                     "Split should be one of train, val, test or all")
