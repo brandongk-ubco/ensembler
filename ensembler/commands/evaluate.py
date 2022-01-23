@@ -20,9 +20,22 @@ metrics = {
 }
 
 
-def process_sample(ground_truth, prediction_dir, threshold, classes):
+def process_sample(ground_truth, dataset, prediction_dir, threshold, classes):
     (image, mask), image_name = ground_truth
-    prediction_file = os.path.join(prediction_dir, "{}.npz".format(image_name))
+
+    val_dir = os.path.join(prediction_dir, "val")
+    test_dir = os.path.join(prediction_dir, "test")
+
+    if image_name in dataset.val_images:
+        type = "val"
+        indir = val_dir
+    elif image_name in dataset.test_images:
+        type = "test"
+        indir = test_dir
+    else:
+        raise AttributeError(f"Unknown image set for {image_name}")
+
+    prediction_file = os.path.join(indir, "{}.npz".format(image_name))
     if not os.path.exists(prediction_file):
         print("Can't find prediction for {}".format(image_name))
         return []
@@ -46,6 +59,7 @@ def process_sample(ground_truth, prediction_dir, threshold, classes):
                     "class": clazz,
                     "threshold": threshold,
                     "metric": metric,
+                    "type": type,
                     "value": result
                 })
     return results
@@ -65,6 +79,7 @@ def evaluate(dataset: Datasets, base_dir: str, threshold: float = 0.5):
     results = []
 
     func = partial(process_sample,
+                   dataset=datamodule.test_data.dataset,
                    prediction_dir=prediction_dir,
                    threshold=threshold,
                    classes=dataset.classes)

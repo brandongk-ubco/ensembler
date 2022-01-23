@@ -49,7 +49,9 @@ def process_file(file_path: str) -> pd.DataFrame:
 def combine_metrics(in_dir: str):
     in_dir = os.path.abspath(in_dir)
     job_hashes = [
-        d for d in os.listdir(in_dir) if os.path.isdir(os.path.join(in_dir, d))
+        d for d in os.listdir(in_dir)
+        if os.path.isdir(os.path.join(in_dir, d)) and
+        d not in ["ebm", "ensembles"]
     ]
 
     metrics_files = glob.glob(os.path.join(in_dir, "**", "metrics.csv"))
