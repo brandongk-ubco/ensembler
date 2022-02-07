@@ -5,6 +5,10 @@ import yaml
 from flatten_dict import flatten
 from ensembler.p_tqdm import t_imap as mapper
 import re
+from functools import partial
+
+from ensembler.Dataset import Dataset
+from ensembler.datasets import Datasets
 
 
 def process_file(file_path: str) -> pd.DataFrame:
@@ -47,11 +51,18 @@ def process_file(file_path: str) -> pd.DataFrame:
 
 
 def combine_metrics(in_dir: str):
+
+    dataset = Datasets["cityscapes"]
+    datamodule = Dataset(dataset=dataset, batch_size=1)
+    dataset = Datasets.get(dataset.value)
+    dataloader = datamodule.test_dataloader()
+    image_names = datamodule.test_data.dataset.get_image_names()
+
     in_dir = os.path.abspath(in_dir)
     job_hashes = [
         d for d in os.listdir(in_dir)
         if os.path.isdir(os.path.join(in_dir, d)) and
-        d not in ["ebm", "ensembles"]
+        d not in ["ebm", "ensembles", "test", "val"]
     ]
 
     metrics_files = glob.glob(os.path.join(in_dir, "**", "metrics.csv"))
@@ -71,6 +82,17 @@ def combine_metrics(in_dir: str):
         combined_metrics.append(df)
 
     combined_metrics = pd.concat(combined_metrics, ignore_index=True)
+
+    def type_mapper(image_name, datamodule):
+        if image_name in datamodule.test_data.dataset.test_images:
+            return "test"
+        if image_name in datamodule.test_data.dataset.val_images:
+            return "val"
+        import pdb
+        pdb.set_trace()
+
+    combined_metrics["type"] = combined_metrics["image"].apply(
+        partial(type_mapper, datamodule=datamodule))
 
     outfile = os.path.join(in_dir, "metrics.csv")
     combined_metrics.to_csv(outfile, index=False)

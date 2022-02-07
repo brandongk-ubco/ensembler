@@ -12,29 +12,8 @@ sns.set(style="whitegrid")
 matplotlib.use('Agg')
 
 
-def visualize_performance(base_dir: str):
-
-    metrics_file = os.path.join(base_dir, "metrics.csv")
-
-    assert os.path.exists(metrics_file)
-
-    random_state = 42
-    test_size = 0.50
-
-    df = pd.read_csv(metrics_file)
-    grouped = df.groupby(by=["job_hash", "class", "metric", "model_activation"
-                            ]).mean().reset_index()
-
-    iou_df = grouped[grouped.metric == "iou"].sort_values("value")
-
-    def renaming_fun(x):
-        return x.replace("model_", "")
-
-    iou_df = iou_df.rename(columns=renaming_fun)
-
-    iou_df["width_ratio"] = (iou_df["width_ratio"] * 10).astype(int)
-
-    plot = sns.boxplot(x='class', y='value', data=iou_df, color="skyblue")
+def plot_miou_by_class(df, base_dir):
+    plot = sns.boxplot(x='class', y='value', data=df, color="skyblue")
 
     fig = plot.get_figure()
 
@@ -54,13 +33,15 @@ def visualize_performance(base_dir: str):
     fig.savefig(outfile, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
+
+def explain_performance(df, base_dir, random_state=42, test_size=0.50):
     train_cols = [
         'depth', 'residual_units', 'width', 'width_ratio', 'activation', 'class'
     ]
     label = "value"
 
-    X = iou_df[train_cols]
-    y = iou_df[label]
+    X = df[train_cols]
+    y = df[label]
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state)
@@ -101,3 +82,31 @@ def visualize_performance(base_dir: str):
     plotly_fig = ebm_perf.visualize()
     outfile = os.path.join(ebm_dir, "performance.png")
     plotly_fig.write_image(outfile)
+
+
+def visualize_performance(base_dir: str):
+
+    metrics_file = os.path.join(base_dir, "metrics.csv")
+
+    assert os.path.exists(metrics_file)
+
+    df = pd.read_csv(metrics_file)
+    grouped = df.groupby(
+        by=["job_hash", "class", "metric", "model_activation", "type"
+           ]).mean().reset_index()
+
+    iou_df = grouped[grouped.metric == "iou"].sort_values("value")
+
+    def renaming_fun(x):
+        return x.replace("model_", "")
+
+    iou_df = iou_df.rename(columns=renaming_fun)
+
+    iou_df["width_ratio"] = (iou_df["width_ratio"] * 10).astype(int)
+
+    for split_type in iou_df["type"].unique():
+        split_df = iou_df[iou_df["type"] == split_type].copy(deep=True)
+        split_dir = os.path.join(base_dir, split_type)
+        os.makedirs(split_dir, exist_ok=True)
+        plot_miou_by_class(split_df, split_dir)
+        explain_performance(split_df, split_dir)

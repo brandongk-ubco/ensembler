@@ -9,13 +9,17 @@ matplotlib.use('Agg')
 sns.set_theme()
 
 
-def statistical_similarity(in_dir: str, p_thresh: float = 0.05):
-    tukey_file = os.path.join(in_dir, "tukey.csv")
+def statistical_similarity(in_dir: str,
+                           p_thresh: float = 0.05,
+                           dataset_type="val"):
+    tukey_file = os.path.join(in_dir, f"{dataset_type}_tukey.csv")
     metrics_file = os.path.join(in_dir, "metrics.csv")
     assert os.path.exists(tukey_file)
     assert os.path.exists(metrics_file)
 
     metrics = pd.read_csv(metrics_file)
+
+    metrics = metrics[metrics["type"] == dataset_type]
 
     tukey = pd.read_csv(tukey_file).rename(columns={"Unnamed: 0": "job_hashes"})
     tukey["better_job_hash"] = tukey.apply(
@@ -39,7 +43,8 @@ def statistical_similarity(in_dir: str, p_thresh: float = 0.05):
             statistically_same[better].append(worse)
             statistically_same[worse].append(better)
 
-    with open(os.path.join(in_dir, "statistically_same.yaml"), "w") as yamlfile:
+    with open(os.path.join(in_dir, f"{dataset_type}_statistically_same.yaml"),
+              "w") as yamlfile:
         yaml.dump(statistically_same, yamlfile, indent=4)
 
     mIoU = metrics[metrics["metric"] == "iou"][[
@@ -62,6 +67,6 @@ def statistical_similarity(in_dir: str, p_thresh: float = 0.05):
     plt.xticks([0, len(ranked_mIoU) - 1])
     plt.tight_layout()
 
-    outfile = os.path.join(in_dir, "statistical_same_count.png")
+    outfile = os.path.join(in_dir, f"{dataset_type}_statistical_same_count.png")
     fig.savefig(outfile, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()

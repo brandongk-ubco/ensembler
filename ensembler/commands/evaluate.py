@@ -27,10 +27,10 @@ def process_sample(ground_truth, dataset, prediction_dir, threshold, classes):
     test_dir = os.path.join(prediction_dir, "test")
 
     if image_name in dataset.val_images:
-        type = "val"
+        image_type = "val"
         indir = val_dir
     elif image_name in dataset.test_images:
-        type = "test"
+        image_type = "test"
         indir = test_dir
     else:
         raise AttributeError(f"Unknown image set for {image_name}")
@@ -59,7 +59,7 @@ def process_sample(ground_truth, dataset, prediction_dir, threshold, classes):
                     "class": clazz,
                     "threshold": threshold,
                     "metric": metric,
-                    "type": type,
+                    "type": image_type,
                     "value": result
                 })
     return results

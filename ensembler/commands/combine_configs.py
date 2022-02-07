@@ -42,7 +42,8 @@ def activation_mapper(activation: str):
 def combine_configs(in_dir: str):
     job_hashes = sorted([
         d for d in os.listdir(in_dir)
-        if os.path.isdir(os.path.join(in_dir, d)) and d != "ensembles"
+        if os.path.isdir(os.path.join(in_dir, d)) and
+        d not in ["ensembles", "test", "val"]
     ])
 
     config_fetcher = partial(get_config, base_dir=in_dir)
@@ -56,54 +57,72 @@ def combine_configs(in_dir: str):
     configs = pd.DataFrame(configs_list)
 
     metrics_file = os.path.join(in_dir, "metrics.csv")
-    similarity_file = os.path.join(in_dir, "statistically_same.yaml")
+    test_similarity_file = os.path.join(in_dir, "test_statistically_same.yaml")
+    val_similarity_file = os.path.join(in_dir, "val_statistically_same.yaml")
 
-    assert os.path.exists(similarity_file)
+    assert os.path.exists(test_similarity_file)
+    assert os.path.exists(val_similarity_file)
     assert os.path.exists(metrics_file)
 
-    with open(similarity_file, "r") as similarity_yaml:
-        statistically_same = yaml.safe_load(similarity_yaml)
+    with open(test_similarity_file, "r") as similarity_yaml:
+        test_statistically_same = yaml.safe_load(similarity_yaml)
+
+    with open(val_similarity_file, "r") as similarity_yaml:
+        val_statistically_same = yaml.safe_load(similarity_yaml)
 
     metrics = pd.read_csv(metrics_file)
 
-    mIoU = metrics[metrics["metric"] == "iou"][[
+    test_metrics = metrics[metrics["type"] == "test"]
+    val_metrics = metrics[metrics["type"] == "val"]
+
+    test_mIoU = test_metrics[test_metrics["metric"] == "iou"][[
         "job_hash", "value"
     ]].groupby(by="job_hash").mean().rename(columns={
-        "value": "mIoU"
-    }).sort_values(by="mIoU", ascending=False).reset_index()
+        "value": "test_mIoU"
+    }).sort_values(by="test_mIoU", ascending=False).reset_index()
+    test_ranked_mIoU = test_mIoU.reset_index().rename(
+        columns={"index": "test_rank"})
+    test_ranked_mIoU["test_rank"] = test_ranked_mIoU["test_rank"] + 1
 
-    ranked_mIoU = mIoU.reset_index().rename(columns={"index": "rank"})
-    ranked_mIoU["rank"] = ranked_mIoU["rank"] + 1
+    val_mIoU = val_metrics[val_metrics["metric"] == "iou"][[
+        "job_hash", "value"
+    ]].groupby(by="job_hash").mean().rename(columns={
+        "value": "val_mIoU"
+    }).sort_values(by="val_mIoU", ascending=False).reset_index()
+    val_ranked_mIoU = val_mIoU.reset_index().rename(
+        columns={"index": "val_rank"})
+    val_ranked_mIoU["val_rank"] = val_ranked_mIoU["val_rank"] + 1
 
     configs = configs.set_index('job_hash').join(
-        ranked_mIoU.set_index('job_hash')).sort_values(
-            "rank", ascending=True).reset_index()
+        test_ranked_mIoU.set_index('job_hash')).join(
+            val_ranked_mIoU.set_index('job_hash')).sort_values(
+                "test_rank", ascending=True).reset_index()
 
-    best_hash = configs.iloc[0]["job_hash"]
+    # best_hash = configs.iloc[0]["job_hash"]
 
-    best_models = statistically_same[best_hash]
-    best_models.append(best_hash)
+    # best_models = statistically_same[best_hash]
+    # best_models.append(best_hash)
 
-    configs["best"] = configs["job_hash"].isin(best_models)
+    # configs["best"] = configs["job_hash"].isin(best_models)
 
-    best_configs = configs[configs["best"] == True]
-    best_configs = best_configs[[
-        "model_activation", "model_depth", "model_residual_units",
-        "model_width", "model_width_ratio", "mIoU"
-    ]]
-    best_configs = best_configs.rename(
-        columns={
-            "model_activation": "Activation",
-            "model_depth": "Depth",
-            "model_residual_units": "Residual Units",
-            "model_width": "Width",
-            "model_width_ratio": "Width Ratio",
-        })
+    # best_configs = configs[configs["best"] == True]
+    # best_configs = best_configs[[
+    #     "model_activation", "model_depth", "model_residual_units",
+    #     "model_width", "model_width_ratio", "mIoU"
+    # ]]
+    # best_configs = best_configs.rename(
+    #     columns={
+    #         "model_activation": "Activation",
+    #         "model_depth": "Depth",
+    #         "model_residual_units": "Residual Units",
+    #         "model_width": "Width",
+    #         "model_width_ratio": "Width Ratio",
+    #     })
 
-    best_configs["Activation"] = best_configs["Activation"].apply(
-        lambda activation: activation_mapper(activation))
-    best_configs.to_latex(os.path.join(in_dir, "best_models.tex"),
-                          index=False,
-                          float_format="%.3f")
+    # best_configs["Activation"] = best_configs["Activation"].apply(
+    #     lambda activation: activation_mapper(activation))
+    # best_configs.to_latex(os.path.join(in_dir, "best_models.tex"),
+    #                       index=False,
+    #                       float_format="%.3f")
 
     configs.to_csv(os.path.join(in_dir, "configs.csv"), index=False)
