@@ -98,31 +98,32 @@ def combine_configs(in_dir: str):
             val_ranked_mIoU.set_index('job_hash')).sort_values(
                 "test_rank", ascending=True).reset_index()
 
-    # best_hash = configs.iloc[0]["job_hash"]
+    best_hash = configs.iloc[0]["job_hash"]
 
-    # best_models = statistically_same[best_hash]
-    # best_models.append(best_hash)
+    best_models = test_statistically_same[best_hash]
+    best_models.append(best_hash)
 
-    # configs["best"] = configs["job_hash"].isin(best_models)
+    configs["best"] = configs["job_hash"].isin(best_models)
 
-    # best_configs = configs[configs["best"] == True]
-    # best_configs = best_configs[[
-    #     "model_activation", "model_depth", "model_residual_units",
-    #     "model_width", "model_width_ratio", "mIoU"
-    # ]]
-    # best_configs = best_configs.rename(
-    #     columns={
-    #         "model_activation": "Activation",
-    #         "model_depth": "Depth",
-    #         "model_residual_units": "Residual Units",
-    #         "model_width": "Width",
-    #         "model_width_ratio": "Width Ratio",
-    #     })
+    best_configs = configs[configs["best"] == True]
+    best_configs = best_configs[[
+        "model_activation", "model_depth", "model_residual_units",
+        "model_width", "model_width_ratio", "test_mIoU"
+    ]]
+    best_configs = best_configs.rename(
+        columns={
+            "model_activation": "Activation",
+            "model_depth": "Depth",
+            "model_residual_units": "Residual Units",
+            "model_width": "Width",
+            "model_width_ratio": "Width Ratio",
+            "test_mIoU": "mIoU"
+        })
 
-    # best_configs["Activation"] = best_configs["Activation"].apply(
-    #     lambda activation: activation_mapper(activation))
-    # best_configs.to_latex(os.path.join(in_dir, "best_models.tex"),
-    #                       index=False,
-    #                       float_format="%.3f")
+    best_configs["Activation"] = best_configs["Activation"].apply(
+        lambda activation: activation_mapper(activation))
+    best_configs.to_latex(os.path.join(in_dir, "best_models.tex"),
+                          index=False,
+                          float_format="%.3f")
 
     configs.to_csv(os.path.join(in_dir, "configs.csv"), index=False)
