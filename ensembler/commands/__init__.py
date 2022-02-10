@@ -10,10 +10,13 @@ from .visualize_ensemble import visualize_ensemble
 from .combine_configs import combine_configs
 from .statistical_similarity import statistical_similarity
 from .visualize_performance import visualize_performance
+from .explain_agreement import explain_agreement
+from .explain_correlation import explain_correlation
 
 __all__ = [
     dataset_initialize, dataset_statistics, evaluate, combine_metrics,
     evaluate_diversity, evaluate_ensemble, visualize_diversity,
     combine_ensemble, visualize_ensemble, combine_configs,
-    statistical_similarity, visualize_performance
+    statistical_similarity, visualize_performance, explain_agreement,
+    explain_correlation
 ]
