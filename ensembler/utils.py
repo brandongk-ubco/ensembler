@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import os
 
 
 def RoundUp(x, mul):
@@ -67,3 +68,52 @@ def classwise_torch(y_hat, y, metric):
         results[i] = metric(y_hat_class, y_class)
 
     return results
+
+
+def extract_explanation(ebm, out_dir):
+
+    rows = []
+    for i, name in enumerate(ebm.data()["names"]):
+        rows.append({
+            "name": name,
+            "score": ebm.data()["scores"][i],
+            "dimension": "importance",
+            "upper_bounds": None,
+            "lower_bounds": None
+        })
+
+    for index, feature_name in enumerate(ebm.feature_names):
+
+        feature_type = ebm.feature_types[index]
+
+        plotly_fig = ebm.visualize(index)
+        outfile = os.path.join(out_dir, f"{feature_name}.png")
+        plotly_fig.write_image(outfile)
+
+        data = ebm.data(index)
+        if feature_type == "categorical":
+            for i, name in enumerate(data["names"]):
+                rows.append({
+                    "name": name,
+                    "score": data["scores"][i],
+                    "dimension": feature_name,
+                    "upper_bounds": data["upper_bounds"][i],
+                    "lower_bounds": data["lower_bounds"][i]
+                })
+        elif feature_type == "continuous":
+            names = data["names"]
+            for i in range(len(names) - 1):
+                rows.append({
+                    "name": f"{name} - {names[i + 1]}",
+                    "score": data["scores"][i],
+                    "dimension": feature_name,
+                    "upper_bounds": data["upper_bounds"][i],
+                    "lower_bounds": data["lower_bounds"][i]
+                })
+        elif feature_type == "interaction":
+            # TODO: Explain here
+            pass
+        else:
+            raise ValueError(f"Unknonwn feature tyupe {feature_type}")
+
+    return rows

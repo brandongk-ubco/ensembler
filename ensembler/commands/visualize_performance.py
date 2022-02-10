@@ -34,56 +34,6 @@ def plot_miou_by_class(df, base_dir):
     plt.close()
 
 
-def explain_performance(df, base_dir, random_state=42, test_size=0.50):
-    train_cols = [
-        'depth', 'residual_units', 'width', 'width_ratio', 'activation', 'class'
-    ]
-    label = "value"
-
-    X = df[train_cols]
-    y = df[label]
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state)
-
-    feature_types = ['categorical'] * len(train_cols)
-
-    ebm = ExplainableBoostingRegressor(
-        feature_names=train_cols,
-        feature_types=feature_types,
-        # Overall
-        n_jobs=os.cpu_count(),
-        random_state=random_state,
-    )
-
-    print("Fitting EBM")
-    ebm.fit(X_train, y_train)
-    score = ebm.score(X_test, y_test)
-    print("Score: {}".format(score))
-    ebm_global = ebm.explain_global(name="IoU Predictor")
-
-    # ebm_local = ebm.explain_local(X_test, y_test, name="Local IoU Predictor")
-    ebm_perf = RegressionPerf(ebm.predict).explain_perf(X_test,
-                                                        y_test,
-                                                        name='IoU Prediction')
-
-    ebm_dir = os.path.join(base_dir, "ebm")
-    os.makedirs(ebm_dir, exist_ok=True)
-
-    plotly_fig = ebm_global.visualize()
-    outfile = os.path.join(ebm_dir, "importance.png")
-    plotly_fig.write_image(outfile)
-
-    for index, feature_name in enumerate(ebm_global.feature_names):
-        plotly_fig = ebm_global.visualize(index)
-        outfile = os.path.join(ebm_dir, f"{feature_name}.png")
-        plotly_fig.write_image(outfile)
-
-    plotly_fig = ebm_perf.visualize()
-    outfile = os.path.join(ebm_dir, "performance.png")
-    plotly_fig.write_image(outfile)
-
-
 def visualize_performance(base_dir: str):
 
     metrics_file = os.path.join(base_dir, "metrics.csv")
@@ -109,4 +59,3 @@ def visualize_performance(base_dir: str):
         split_dir = os.path.join(base_dir, split_type)
         os.makedirs(split_dir, exist_ok=True)
         plot_miou_by_class(split_df, split_dir)
-        explain_performance(split_df, split_dir)

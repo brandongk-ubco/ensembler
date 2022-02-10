@@ -1,17 +1,25 @@
+from multiprocessing.sharedctypes import Value
 import pandas as pd
 import os
 from sklearn.model_selection import train_test_split
 from interpret.glassbox import ExplainableBoostingRegressor
 from interpret.perf import RegressionPerf
 
+from ensembler.utils import extract_explanation
 
-def explain(df, base_dir, random_state=42, test_size=0.50):
+
+def explain(df, ebm_dir, random_state=42, test_size=0.50):
     train_cols = [
         'depth', 'residual_units', 'width', 'width_ratio', 'activation',
         "performance_diff"
     ]
+    feature_types = [
+        'categorical', 'categorical', 'categorical', 'categorical',
+        'categorical', 'continuous'
+    ]
     if len(df["class"].unique()) > 1:
         train_cols.append("class")
+        feature_types.append("categorical")
     label = "agreement"
 
     X = df[train_cols]
@@ -19,8 +27,6 @@ def explain(df, base_dir, random_state=42, test_size=0.50):
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state)
-
-    feature_types = ['categorical'] * len(train_cols)
 
     ebm = ExplainableBoostingRegressor(
         feature_names=train_cols,
@@ -39,43 +45,13 @@ def explain(df, base_dir, random_state=42, test_size=0.50):
     ebm_perf = RegressionPerf(ebm.predict).explain_perf(
         X_test, y_test, name='Agreement Prediction')
 
-    ebm_dir = os.path.join(base_dir, "agreement")
     os.makedirs(ebm_dir, exist_ok=True)
 
     plotly_fig = ebm_global.visualize()
     outfile = os.path.join(ebm_dir, "importance.png")
     plotly_fig.write_image(outfile)
 
-    rows = []
-    for i, name in enumerate(ebm_global.data()["names"]):
-        rows.append({
-            "name": name,
-            "score": ebm_global.data()["scores"][i],
-            "type": "agreement",
-            "dimension": "importance",
-            "upper_bounds": None,
-            "lower_bounds": None
-        })
-
-    for index, feature_name in enumerate(ebm_global.feature_names):
-        plotly_fig = ebm_global.visualize(index)
-        outfile = os.path.join(ebm_dir, f"{feature_name}.png")
-        plotly_fig.write_image(outfile)
-
-        data = ebm_global.data(index)
-        if "names" not in data:
-            continue
-        for i, name in enumerate(data["names"]):
-            if data["type"] != "univariate":
-                continue
-            rows.append({
-                "name": name,
-                "score": data["scores"][i],
-                "type": "agreement",
-                "dimension": feature_name,
-                "upper_bounds": data["upper_bounds"][i],
-                "lower_bounds": data["lower_bounds"][i]
-            })
+    rows = extract_explanation(ebm_global, ebm_dir)
 
     plotly_fig = ebm_perf.visualize()
     outfile = os.path.join(ebm_dir, "agreement.png")
@@ -169,11 +145,20 @@ def explain_agreement(in_dir: str):
     agreement_score, agreement_rows = explain(
         diversity, os.path.join(in_dir, "ebms", "agreement", "overall"))
 
-    agreement_rows = [dict(**a, **{"class": "overall"}) for a in agreement_rows]
+    agreement_rows = [
+        dict(**a, **{
+            "class": "overall",
+            "type": "agreement"
+        }) for a in agreement_rows
+    ]
 
     details += agreement_rows
 
-    scores.append({"class": "overall", "agreement_score": agreement_score})
+    scores.append({
+        "class": "overall",
+        "type": "agreement",
+        "agreement_score": agreement_score
+    })
 
     classes = diversity["class"].unique()
     for clazz in classes:
