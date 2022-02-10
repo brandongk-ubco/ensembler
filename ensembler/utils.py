@@ -104,7 +104,7 @@ def extract_explanation(ebm, out_dir):
             names = data["names"]
             for i in range(len(names) - 1):
                 rows.append({
-                    "name": f"{name} - {names[i + 1]}",
+                    "name": f"{names[i]} - {names[i + 1]}",
                     "score": data["scores"][i],
                     "dimension": feature_name,
                     "upper_bounds": data["upper_bounds"][i],

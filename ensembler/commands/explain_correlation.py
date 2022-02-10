@@ -74,8 +74,7 @@ def build_df(in_dir: str):
     right_configs = right_configs.add_prefix("right_")
     diversity = diversity.loc[:, ~diversity.columns.str.contains('^Unnamed')]
     diversity = diversity[[
-        "left_job_hash", "right_job_hash", "correlation",
-        "disagreement_correlation", "class"
+        "left_job_hash", "right_job_hash", "disagreement_correlation", "class"
     ]]
 
     diversity = diversity.merge(left_configs, on="left_job_hash", how="inner")

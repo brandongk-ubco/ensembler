@@ -8,7 +8,7 @@ from ensembler.utils import extract_explanation
 
 def explain(df, base_dir, random_state=42, test_size=0.50):
     train_cols = [
-        'depth', 'residual_units', 'width', 'width_ratio', 'activation', 'class'
+        'depth', 'residual_units', 'width', 'width_ratio', 'activation'
     ]
     label = "value"
     if len(df["class"].unique()) > 1:

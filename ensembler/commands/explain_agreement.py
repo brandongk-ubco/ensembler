@@ -76,8 +76,7 @@ def build_df(in_dir: str):
     right_configs = right_configs.add_prefix("right_")
     diversity = diversity.loc[:, ~diversity.columns.str.contains('^Unnamed')]
     diversity = diversity[[
-        "left_job_hash", "right_job_hash", "agreement",
-        "disagreement_correlation", "class"
+        "left_job_hash", "right_job_hash", "agreement", "class"
     ]]
 
     diversity = diversity.merge(left_configs, on="left_job_hash", how="inner")
@@ -173,5 +172,5 @@ def explain_agreement(in_dir: str):
               index=False)
 
     df = pd.DataFrame(details)
-    df.to_csv(os.path.join(in_dir, "ebms", "agreement", " details.csv"),
+    df.to_csv(os.path.join(in_dir, "ebms", "agreement", "details.csv"),
               index=False)
