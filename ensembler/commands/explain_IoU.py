@@ -3,6 +3,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from interpret.glassbox import ExplainableBoostingRegressor
 from interpret.perf import RegressionPerf
+from ensembler.utils import extract_explanation
 
 
 def explain(df, base_dir, random_state=42, test_size=0.50):
@@ -12,7 +13,6 @@ def explain(df, base_dir, random_state=42, test_size=0.50):
     label = "value"
     if len(df["class"].unique()) > 1:
         train_cols.append("class")
-    label = "agreement"
 
     X = df[train_cols]
     y = df[label]
@@ -47,51 +47,24 @@ def explain(df, base_dir, random_state=42, test_size=0.50):
     outfile = os.path.join(ebm_dir, "importance.png")
     plotly_fig.write_image(outfile)
 
-    rows = []
-    for i, name in enumerate(ebm_global.data()["names"]):
-        rows.append({
-            "name": name,
-            "score": ebm_global.data()["scores"][i],
-            "type": "IoU",
-            "dimension": "importance",
-            "upper_bounds": None,
-            "lower_bounds": None
-        })
-
-    for index, feature_name in enumerate(ebm_global.feature_names):
-        plotly_fig = ebm_global.visualize(index)
-        outfile = os.path.join(ebm_dir, f"{feature_name}.png")
-        plotly_fig.write_image(outfile)
-
-        data = ebm_global.data(index)
-        if "names" not in data:
-            continue
-        for i, name in enumerate(data["names"]):
-            if data["type"] != "univariate":
-                continue
-            rows.append({
-                "name": name,
-                "score": data["scores"][i],
-                "type": "IoU",
-                "dimension": feature_name,
-                "upper_bounds": data["upper_bounds"][i],
-                "lower_bounds": data["lower_bounds"][i]
-            })
+    rows = extract_explanation(ebm_global, ebm_dir)
 
     plotly_fig = ebm_perf.visualize()
-    outfile = os.path.join(ebm_dir, "agreement.png")
+    outfile = os.path.join(ebm_dir, "performance.png")
     plotly_fig.write_image(outfile)
 
     return score, rows
 
 
-def explain_IoU(base_dir: str):
+def build_df(in_dir: str):
 
-    metrics_file = os.path.join(base_dir, "metrics.csv")
+    metrics_file = os.path.join(in_dir, "metrics.csv")
 
     assert os.path.exists(metrics_file)
 
     df = pd.read_csv(metrics_file)
+    df = df[df["type"] == "test"]
+
     grouped = df.groupby(
         by=["job_hash", "class", "metric", "model_activation", "type"
            ]).mean().reset_index()
@@ -104,9 +77,43 @@ def explain_IoU(base_dir: str):
     iou_df = iou_df.rename(columns=renaming_fun)
 
     iou_df["width_ratio"] = (iou_df["width_ratio"] * 10).astype(int)
+    return iou_df
 
-    for split_type in iou_df["type"].unique():
-        split_df = iou_df[iou_df["type"] == split_type].copy(deep=True)
-        split_dir = os.path.join(base_dir, split_type)
-        os.makedirs(split_dir, exist_ok=True)
-        explain_performance(split_df, split_dir)
+
+def explain_IoU(in_dir: str):
+
+    df = build_df(in_dir)
+
+    scores = []
+    details = []
+
+    print("Overall")
+
+    score, rows = explain(df, os.path.join(in_dir, "ebms", "IoU", "overall"))
+
+    rows = [dict(**a, **{"class": "overall"}) for a in rows]
+
+    details += rows
+
+    scores.append({"class": "overall", "score": score})
+
+    classes = df["class"].unique()
+    for clazz in classes:
+        print(clazz)
+        class_df = df[df["class"] == clazz]
+        score, rows = explain(class_df,
+                              os.path.join(in_dir, "ebms", "IoU", clazz))
+
+        rows = [dict(**a, **{"class": clazz}) for a in rows]
+
+        details += rows
+        scores.append({
+            "class": clazz,
+            "score": score,
+        })
+
+    df = pd.DataFrame(scores)
+    df.to_csv(os.path.join(in_dir, "ebms", "IoU", "scores.csv"), index=False)
+
+    df = pd.DataFrame(details)
+    df.to_csv(os.path.join(in_dir, "ebms", "IoU", "details.csv"), index=False)

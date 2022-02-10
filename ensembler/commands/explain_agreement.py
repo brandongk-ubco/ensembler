@@ -54,7 +54,7 @@ def explain(df, ebm_dir, random_state=42, test_size=0.50):
     rows = extract_explanation(ebm_global, ebm_dir)
 
     plotly_fig = ebm_perf.visualize()
-    outfile = os.path.join(ebm_dir, "agreement.png")
+    outfile = os.path.join(ebm_dir, "performance.png")
     plotly_fig.write_image(outfile)
 
     return score, rows
@@ -142,42 +142,36 @@ def explain_agreement(in_dir: str):
 
     print("Overall")
 
-    agreement_score, agreement_rows = explain(
-        diversity, os.path.join(in_dir, "ebms", "agreement", "overall"))
+    score, rows = explain(diversity,
+                          os.path.join(in_dir, "ebms", "agreement", "overall"))
 
-    agreement_rows = [
-        dict(**a, **{
-            "class": "overall",
-            "type": "agreement"
-        }) for a in agreement_rows
-    ]
-
-    details += agreement_rows
-
-    scores.append({
+    rows = [dict(**a, **{
         "class": "overall",
-        "type": "agreement",
-        "agreement_score": agreement_score
-    })
+    }) for a in rows]
+
+    details += rows
+
+    scores.append({"class": "overall", "score": score})
 
     classes = diversity["class"].unique()
     for clazz in classes:
         print(clazz)
         class_df = diversity[diversity["class"] == clazz]
-        agreement_score, agreement_rows = explain(
-            class_df, os.path.join(in_dir, "ebms", "agreement", clazz))
+        score, rows = explain(class_df,
+                              os.path.join(in_dir, "ebms", "agreement", clazz))
 
-        agreement_rows = [dict(**a, **{"class": clazz}) for a in agreement_rows]
+        rows = [dict(**a, **{"class": clazz}) for a in rows]
 
-        details += agreement_rows
+        details += rows
         scores.append({
             "class": clazz,
-            "agreement_score": agreement_score,
+            "score": score,
         })
 
     df = pd.DataFrame(scores)
-    df.to_csv(os.path.join(in_dir, "ebms", "agreement_scores.csv"), index=False)
+    df.to_csv(os.path.join(in_dir, "ebms", "agreement", "scores.csv"),
+              index=False)
 
     df = pd.DataFrame(details)
-    df.to_csv(os.path.join(in_dir, "ebms", "agreement_details.csv"),
+    df.to_csv(os.path.join(in_dir, "ebms", "agreement", " details.csv"),
               index=False)

@@ -6,13 +6,18 @@ from interpret.perf import RegressionPerf
 from ensembler.utils import extract_explanation
 
 
-def explain(df, base_dir, random_state=42, test_size=0.50):
+def explain(df, ebm_dir, random_state=42, test_size=0.50):
     train_cols = [
         'depth', 'residual_units', 'width', 'width_ratio', 'activation',
         "performance_diff"
     ]
+    feature_types = [
+        'categorical', 'categorical', 'categorical', 'categorical',
+        'categorical', 'continuous'
+    ]
     if len(df["class"].unique()) > 1:
         train_cols.append("class")
+        feature_types.append("categorical")
     label = "disagreement_correlation"
 
     X = df[train_cols]
@@ -20,9 +25,6 @@ def explain(df, base_dir, random_state=42, test_size=0.50):
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state)
-
-    feature_types = ['categorical'] * len(train_cols)
-    feature_types[-1] = 'continuous'
 
     ebm = ExplainableBoostingRegressor(
         feature_names=train_cols,
@@ -41,7 +43,6 @@ def explain(df, base_dir, random_state=42, test_size=0.50):
     ebm_perf = RegressionPerf(ebm.predict).explain_perf(
         X_test, y_test, name='Correlation Prediction')
 
-    ebm_dir = os.path.join(base_dir, "correlation")
     os.makedirs(ebm_dir, exist_ok=True)
 
     plotly_fig = ebm_global.visualize()
@@ -51,7 +52,7 @@ def explain(df, base_dir, random_state=42, test_size=0.50):
     rows = extract_explanation(ebm_global, ebm_dir)
 
     plotly_fig = ebm_perf.visualize()
-    outfile = os.path.join(ebm_dir, "correlation.png")
+    outfile = os.path.join(ebm_dir, "performance.png")
     plotly_fig.write_image(outfile)
 
     return score, rows
@@ -139,38 +140,34 @@ def explain_correlation(in_dir: str):
 
     print("Overall")
 
-    correlation_score, correlation_rows = explain(
+    score, rows = explain(
         diversity, os.path.join(in_dir, "ebms", "correlation", "overall"))
 
-    correlation_rows = [
-        dict(**a, **{"class": "overall"}) for a in correlation_rows
-    ]
+    rows = [dict(**a, **{"class": "overall"}) for a in rows]
 
-    details += correlation_rows
+    details += rows
 
-    scores.append({"class": "overall", "correlation_score": correlation_score})
+    scores.append({"class": "overall", "score": score})
 
     classes = diversity["class"].unique()
     for clazz in classes:
         print(clazz)
         class_df = diversity[diversity["class"] == clazz]
-        correlation_score, correlation_rows = explain(
+        score, rows = explain(
             class_df, os.path.join(in_dir, "ebms", "correlation", clazz))
 
-        correlation_rows = [
-            dict(**a, **{"class": clazz}) for a in correlation_rows
-        ]
+        rows = [dict(**a, **{"class": clazz}) for a in rows]
 
-        details += correlation_rows
+        details += rows
         scores.append({
             "class": clazz,
-            "correlation_score": correlation_score,
+            "score": score,
         })
 
     df = pd.DataFrame(scores)
-    df.to_csv(os.path.join(in_dir, "ebms", "correlation_scores.csv"),
+    df.to_csv(os.path.join(in_dir, "ebms", "correlation", "scores.csv"),
               index=False)
 
     df = pd.DataFrame(details)
-    df.to_csv(os.path.join(in_dir, "ebms", "correlation_details.csv"),
+    df.to_csv(os.path.join(in_dir, "ebms", "correlation", "details.csv"),
               index=False)
