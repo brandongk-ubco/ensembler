@@ -6,7 +6,7 @@ from interpret.perf import RegressionPerf
 from ensembler.utils import extract_explanation
 
 
-def explain(df, base_dir, random_state=42, test_size=0.50):
+def explain(df, ebm_dir, random_state=42, test_size=0.50):
     train_cols = [
         'depth', 'residual_units', 'width', 'width_ratio', 'activation'
     ]
@@ -40,7 +40,6 @@ def explain(df, base_dir, random_state=42, test_size=0.50):
                                                         y_test,
                                                         name='IoU Prediction')
 
-    ebm_dir = os.path.join(base_dir, "mIoU")
     os.makedirs(ebm_dir, exist_ok=True)
 
     plotly_fig = ebm_global.visualize()

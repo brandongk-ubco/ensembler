@@ -12,11 +12,12 @@ from .statistical_similarity import statistical_similarity
 from .explain_IoU import explain_IoU
 from .explain_agreement import explain_agreement
 from .explain_correlation import explain_correlation
+from .visualize_explanations import visualize_explanations
 
 __all__ = [
     dataset_initialize, dataset_statistics, evaluate, combine_metrics,
     evaluate_diversity, evaluate_ensemble, visualize_diversity,
     combine_ensemble, visualize_ensemble, combine_configs,
-    statistical_similarity, explain_IoU, explain_agreement,
-    explain_correlation
+    statistical_similarity, explain_IoU, explain_agreement, explain_correlation,
+    visualize_explanations
 ]

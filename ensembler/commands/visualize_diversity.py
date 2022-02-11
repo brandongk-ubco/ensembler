@@ -3,9 +3,6 @@ import os
 from matplotlib import pyplot as plt
 import matplotlib
 import seaborn as sns
-from sklearn.model_selection import train_test_split
-from interpret.glassbox import ExplainableBoostingRegressor
-from interpret.perf import RegressionPerf
 
 sns.set_theme()
 matplotlib.use('Agg')
