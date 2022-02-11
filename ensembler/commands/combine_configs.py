@@ -43,7 +43,7 @@ def combine_configs(in_dir: str):
     job_hashes = sorted([
         d for d in os.listdir(in_dir)
         if os.path.isdir(os.path.join(in_dir, d)) and
-        d not in ["ensembles", "test", "val"]
+        d not in ["ensembles", "test", "val", "ebms"]
     ])
 
     config_fetcher = partial(get_config, base_dir=in_dir)

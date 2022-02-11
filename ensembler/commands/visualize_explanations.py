@@ -38,6 +38,33 @@ def visualize_explanations(base_dir: str):
                                  "score_iou": "IoU"
                              }).sort_values("IoU", ascending=False)
 
+    scores_boxplot_df = scores_df.copy(deep=True).iloc[1:]
+
+    import pdb
+    pdb.set_trace()
+
+    scores_boxplot_df = pd.melt(
+        scores_boxplot_df,
+        id_vars=['class'],
+        value_vars=["Agreement", "Correlation",
+                    "IoU"]).rename(columns={"variable": "category"})
+
+    plot = sns.boxplot(data=scores_boxplot_df,
+                       x="category",
+                       y="value",
+                       order=["IoU", "Agreement", "Correlation"])
+
+    fig = plot.get_figure()
+    ax = fig.get_axes()[0]
+
+    ax.set_xlabel("")
+    ax.set_ylabel("Explanation Quality $(R^2)$")
+    ax.set_title("Explanation Quality by Category")
+
+    outfile = os.path.join(ebm_dir, "explanation_quality.png")
+    fig.savefig(outfile, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
     scores_df.loc['mean'] = scores_df.iloc[1:].mean()
     scores_df.at['mean', 'class'] = "mean"
     scores_df.loc['median'] = scores_df.iloc[1:-1].median()
@@ -48,20 +75,3 @@ def visualize_explanations(base_dir: str):
     scores_df.to_latex(os.path.join(ebm_dir, "explanation_quality.tex"),
                        float_format="%.2f",
                        index=False)
-    # scores_df = pd.melt(scores_df,
-    #                     id_vars=['class'],
-    #                     value_vars=["Agreement", "Correlation", "IoU"
-    #                                ]).rename(columns={"variable": "category"})
-
-    # plot = sns.boxplot(data=scores_df, x="class", y="value", hue="category")
-
-    # fig = plot.get_figure()
-    # ax = fig.get_axes()[0]
-
-    # ax.set_xlabel("Class")
-    # ax.set_ylabel("Prediction Quality $(R^2)$")
-    # ax.set_title("Prediction Quality by Class and Category")
-
-    # outfile = os.path.join(ebm_dir, "prediction_quality.png")
-    # fig.savefig(outfile, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    # plt.close()
