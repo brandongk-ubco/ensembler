@@ -10,6 +10,56 @@ sns.set(style="whitegrid")
 matplotlib.use('Agg')
 
 
+def boxplot(df, directory, prefix):
+
+    for dimension in df["dimension"].unique():
+        dimension_df = df[df["dimension"] == dimension]
+        types = len(dimension_df["type"].unique())
+        if dimension == "Importance":
+            dimension = "Overall"
+        if dimension == "Performance Diff":
+            continue
+
+        order_df = dimension_df.copy(deep=True)
+        order_df["score"] = order_df["score"].abs()
+        order = dimension_df.groupby("name").max().sort_values(
+            "score", ascending=False).index.tolist()
+        plot = sns.barplot(data=dimension_df,
+                           x="name",
+                           y="score",
+                           color="skyblue",
+                           hue="type",
+                           order=order)
+
+        plt.legend(bbox_to_anchor=(0, 1, 1, 0.2),
+                   loc="lower left",
+                   ncol=types,
+                   frameon=False)
+
+        fig = plot.get_figure()
+        ax = fig.get_axes()[0]
+
+        ax.set_xlabel("", fontsize=1)
+        ax.set_ylabel("", fontsize=1)
+        ax.set_title("")
+        title = f"Overall {dimension} Importance on {prefix}"
+        if dimension == "Overall":
+            title = "Overall Importance on {prefix}"
+        fig.suptitle(title, y=1.02, fontsize=14)
+        ax.tick_params(axis="x", labelrotation=90)
+
+        ax.yaxis.grid(False)
+        plt.axhline(0, alpha=0.5)
+        if types > 1:
+            ax.xaxis.grid(True, linestyle='dashed', alpha=0.2)
+            ax.set_axisbelow(False)
+
+        outfile = os.path.join(directory, f"{title}.png")
+
+        fig.savefig(outfile, dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
+
+
 def visualize_explanations(base_dir: str):
 
     ebm_dir = os.path.join(base_dir, "ebms")
@@ -40,9 +90,6 @@ def visualize_explanations(base_dir: str):
 
     scores_boxplot_df = scores_df.copy(deep=True).iloc[1:]
 
-    import pdb
-    pdb.set_trace()
-
     scores_boxplot_df = pd.melt(
         scores_boxplot_df,
         id_vars=['class'],
@@ -52,6 +99,7 @@ def visualize_explanations(base_dir: str):
     plot = sns.boxplot(data=scores_boxplot_df,
                        x="category",
                        y="value",
+                       color="skyblue",
                        order=["IoU", "Agreement", "Correlation"])
 
     fig = plot.get_figure()
@@ -75,3 +123,48 @@ def visualize_explanations(base_dir: str):
     scores_df.to_latex(os.path.join(ebm_dir, "explanation_quality.tex"),
                        float_format="%.2f",
                        index=False)
+
+    iou_overall_df = iou_details_df[iou_details_df["class"] == "overall"].copy(
+        deep=True)
+    agreement_overall_df = agreement_details_df[agreement_details_df["class"] ==
+                                                "overall"].copy(deep=True)
+    correlation_overall_df = correlation_details_df[
+        correlation_details_df["class"] == "overall"].copy(deep=True)
+
+    iou_overall_df["type"] = "iou"
+    agreement_overall_df["type"] = "agreement"
+    correlation_overall_df["type"] = "correlation"
+
+    iou_overall_df = iou_overall_df[["name", "score", "type", "dimension"]]
+    agreement_overall_df = agreement_overall_df[[
+        "name", "score", "type", "dimension"
+    ]]
+    correlation_overall_df = correlation_overall_df[[
+        "name", "score", "type", "dimension"
+    ]]
+
+    overall_df = pd.concat(
+        [iou_overall_df, agreement_overall_df,
+         correlation_overall_df]).copy(deep=True)
+
+    def name_mapping(name):
+        return name.replace("_", " ").title()
+
+    def type_mapping(type_txt):
+        if type_txt == "iou":
+            return "IoU"
+        if type_txt == "correlation":
+            return "Correlation"
+        if type_txt == "agreement":
+            return "Agreement"
+        return type_txt
+
+    overall_df["name"] = overall_df["name"].apply(name_mapping)
+    overall_df["dimension"] = overall_df["dimension"].apply(name_mapping)
+    overall_df["type"] = overall_df["type"].apply(type_mapping)
+
+    iou_df = overall_df[overall_df["type"] == "IoU"]
+    diversity_df = overall_df[overall_df["type"] != "IoU"]
+
+    boxplot(iou_df, ebm_dir, prefix="IoU")
+    boxplot(diversity_df, ebm_dir, prefix="Diversity")

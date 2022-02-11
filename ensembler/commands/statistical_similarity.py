@@ -61,11 +61,15 @@ def statistical_similarity(in_dir: str,
     plot = sns.barplot(data=ranked_mIoU,
                        x='rank',
                        y='statistically_same_count',
-                       color='black')
+                       color='skyblue')
     fig = plot.get_figure()
+    ax = fig.get_axes()[0]
 
     plt.xticks([0, len(ranked_mIoU) - 1])
     plt.tight_layout()
+
+    ax.set_xlabel("Rank (Better performing models on left)")
+    ax.set_ylabel("Count")
 
     outfile = os.path.join(in_dir, f"{dataset_type}_statistical_same_count.png")
     fig.savefig(outfile, dpi=300, bbox_inches='tight', pad_inches=0.5)

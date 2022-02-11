@@ -13,7 +13,11 @@ matplotlib.use('Agg')
 
 
 def plot_miou_by_class(df, base_dir):
-    plot = sns.boxplot(x='class', y='value', data=df, color="skyblue")
+    plot = sns.boxplot(x='class',
+                       y='value',
+                       data=df,
+                       color="skyblue",
+                       hue="Dataset")
 
     fig = plot.get_figure()
 
@@ -53,9 +57,6 @@ def visualize_performance(base_dir: str):
     iou_df = iou_df.rename(columns=renaming_fun)
 
     iou_df["width_ratio"] = (iou_df["width_ratio"] * 10).astype(int)
+    iou_df = iou_df.rename(columns={"type": "Dataset"})
 
-    for split_type in iou_df["type"].unique():
-        split_df = iou_df[iou_df["type"] == split_type].copy(deep=True)
-        split_dir = os.path.join(base_dir, split_type)
-        os.makedirs(split_dir, exist_ok=True)
-        plot_miou_by_class(split_df, split_dir)
+    plot_miou_by_class(iou_df, base_dir)
