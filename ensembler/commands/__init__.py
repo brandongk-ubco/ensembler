@@ -14,11 +14,12 @@ from .explain_agreement import explain_agreement
 from .explain_correlation import explain_correlation
 from .visualize_explanations import visualize_explanations
 from .visualize_performance import visualize_performance
+from .visualize_activations import visualize_activations
 
 __all__ = [
     dataset_initialize, dataset_statistics, evaluate, combine_metrics,
     evaluate_diversity, evaluate_ensemble, visualize_diversity,
     combine_ensemble, visualize_ensemble, combine_configs,
     statistical_similarity, explain_IoU, explain_agreement, explain_correlation,
-    visualize_explanations, visualize_performance
+    visualize_explanations, visualize_performance, visualize_activations
 ]

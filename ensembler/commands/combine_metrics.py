@@ -62,7 +62,7 @@ def combine_metrics(in_dir: str):
     job_hashes = [
         d for d in os.listdir(in_dir)
         if os.path.isdir(os.path.join(in_dir, d)) and
-        d not in ["ebm", "ensembles", "test", "val"]
+        d not in ["ebms", "ensembles", "test", "val"]
     ]
 
     metrics_files = glob.glob(os.path.join(in_dir, "**", "metrics.csv"))
