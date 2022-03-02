@@ -64,9 +64,10 @@ def build_df(in_dir: str):
     df = pd.read_csv(metrics_file)
     df = df[df["type"] == "test"]
 
-    grouped = df.groupby(
-        by=["job_hash", "class", "metric", "model_activation", "type"
-           ]).mean().reset_index()
+    grouped = df.groupby(by=[
+        "job_hash", "class", "metric", "model_activation", "model_width",
+        "model_width_ratio", "type"
+    ]).mean().reset_index()
 
     iou_df = grouped[grouped.metric == "iou"].sort_values("value")
 
@@ -75,7 +76,6 @@ def build_df(in_dir: str):
 
     iou_df = iou_df.rename(columns=renaming_fun)
 
-    iou_df["width_ratio"] = (iou_df["width_ratio"] * 10).astype(int)
     return iou_df
 
 

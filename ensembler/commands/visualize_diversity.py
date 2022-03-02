@@ -3,6 +3,7 @@ import os
 from matplotlib import pyplot as plt
 import matplotlib
 import seaborn as sns
+import numpy as np
 
 sns.set_theme()
 matplotlib.use('Agg')
@@ -54,7 +55,7 @@ def build_df(in_dir: str):
     right_configs = right_configs.add_prefix("right_")
     diversity = diversity.loc[:, ~diversity.columns.str.contains('^Unnamed')]
     diversity = diversity[[
-        "left_job_hash", "right_job_hash", "correlation",
+        "left_job_hash", "right_job_hash", "agreement",
         "disagreement_correlation", "class"
     ]]
 
@@ -111,7 +112,61 @@ def build_df(in_dir: str):
     return configs, diversity
 
 
+def boxplot(diversity, in_dir: str):
+
+    diversity = diversity.sort_values("agreement")
+
+    plot = sns.boxplot(x='class',
+                       y='agreement',
+                       data=diversity,
+                       color="skyblue")
+
+    fig = plot.get_figure()
+
+    for patch in plot.artists:
+        r, g, b, a = patch.get_facecolor()
+        patch.set_facecolor((r, g, b, .5))
+
+    plot.set_yticks(np.linspace(0, 1, num=21))
+
+    plot.set_xlabel('Class')
+    plot.set_ylabel('Agreement')
+    plot.set_title('Agreement by Class')
+    for tick in plot.get_xticklabels():
+        tick.set_rotation(90)
+
+    outfile = os.path.join(in_dir, "agreement.png")
+    fig.savefig(outfile, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
+    diversity = diversity.sort_values("disagreement_correlation")
+
+    plot = sns.boxplot(x='class',
+                       y='disagreement_correlation',
+                       data=diversity,
+                       color="skyblue")
+
+    fig = plot.get_figure()
+
+    for patch in plot.artists:
+        r, g, b, a = patch.get_facecolor()
+        patch.set_facecolor((r, g, b, .5))
+
+    plot.set_yticks(np.linspace(-0.3, 1, num=27))
+
+    plot.set_xlabel('Class')
+    plot.set_ylabel('Correlation')
+    plot.set_title('Correlation by Class')
+    for tick in plot.get_xticklabels():
+        tick.set_rotation(90)
+
+    outfile = os.path.join(in_dir, "correlation.png")
+    fig.savefig(outfile, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
+
 def visualize_diversity(in_dir: str):
 
     configs, diversity = build_df(in_dir)
-    scatterplots(configs, diversity, in_dir)
+    # scatterplots(configs, diversity, in_dir)
+    boxplot(diversity, in_dir)

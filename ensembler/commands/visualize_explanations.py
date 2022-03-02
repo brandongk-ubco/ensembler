@@ -9,7 +9,6 @@ import numpy as np
 sns.set(style="whitegrid")
 matplotlib.use('Agg')
 
-
 def barplot(df, directory, prefix):
 
     for dimension in df["dimension"].unique():
@@ -251,6 +250,8 @@ def combined_details(base_dir, iou_details_df, agreement_details_df,
 
 
 def visualize_explanations(base_dir: str):
+
+    plt.rcParams['figure.figsize'] = [8, 5]
 
     ebm_dir = os.path.join(base_dir, "ebms")
     iou_dir = os.path.join(ebm_dir, "IoU")

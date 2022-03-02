@@ -10,7 +10,6 @@ import numpy as np
 
 sns.set(style="whitegrid")
 matplotlib.use('Agg')
-plt.rcParams['figure.figsize'] = [11, 5]
 
 
 @lru_cache(maxsize=None)
@@ -48,6 +47,9 @@ def activation_mapper(activation: str):
 
 
 def combine_configs(in_dir: str):
+
+    plt.rcParams['figure.figsize'] = [11, 5]
+
     job_hashes = sorted([
         d for d in os.listdir(in_dir)
         if os.path.isdir(os.path.join(in_dir, d)) and
